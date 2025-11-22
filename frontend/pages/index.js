@@ -1,23 +1,57 @@
 import { useState, useEffect } from 'react'
+import { ethers } from 'ethers'
 
 export default function DocumentVerification() {
   const [account, setAccount] = useState('')
-  const [hasMetaMask, setHasMetaMask] = useState(false)
+  const [contract, setContract] = useState(null)
+  const [documentHash, setDocumentHash] = useState('')
+  const [documentType, setDocumentType] = useState('CMND')
+  const [verificationResult, setVerificationResult] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [fileName, setFileName] = useState('')
+
+  // THAY BẰNG CONTRACT ADDRESS THẬT CỦA BẠN
+  const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
+  
+  const contractABI = [
+    "function registerDocument(string _documentHash, string _documentType) public",
+    "function verifyDocument(string _documentHash) public view returns (bool)",
+    "function getUserDocuments(address _user) public view returns (string[] memory)",
+    "event DocumentRegistered(string indexed documentHash, address indexed owner)"
+  ]
 
   useEffect(() => {
-    // Kiểm tra MetaMask khi component mount
+    // Kiểm tra MetaMask
     if (typeof window.ethereum !== 'undefined') {
-      setHasMetaMask(true)
+      initContract()
     }
   }, [])
 
+  const initContract = async () => {
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const signer = await provider.getSigner()
+      const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
+      setContract(contractInstance)
+    } catch (error) {
+      console.log('Contract chưa khởi tạo - cần kết nối ví trước')
+    }
+  }
+
   const connectWallet = async () => {
-    if (hasMetaMask) {
+    if (typeof window.ethereum !== 'undefined') {
       try {
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         })
         setAccount(accounts[0])
+        
+        // Khởi tạo contract sau khi kết nối ví
+        const provider = new ethers.BrowserProvider(window.ethereum)
+        const signer = await provider.getSigner()
+        const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
+        setContract(contractInstance)
+        
         alert(`✅ Đã kết nối: ${accounts[0]}`)
       } catch (error) {
         if (error.code === 4001) {
@@ -31,65 +65,410 @@ export default function DocumentVerification() {
     }
   }
 
-  return (
-    <div style={{ 
-      padding: '50px', 
-      textAlign: 'center',
-      fontFamily: 'Arial',
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      color: 'white'
-    }}>
-      <h1>🆔 XÁC THỰC GIẤY TỜ BLOCKCHAIN</h1>
+  const calculateFileHash = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const arrayBuffer = e.target.result
+          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
+          const hashArray = Array.from(new Uint8Array(hashBuffer))
+          const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+          resolve(hashHex)
+        } catch (error) {
+          reject(error)
+        }
+      }
+      reader.onerror = reject
+      reader.readAsArrayBuffer(file)
+    })
+  }
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0]
+    if (file) {
+      setLoading(true)
+      try {
+        const hash = await calculateFileHash(file)
+        setDocumentHash(hash)
+        setFileName(file.name)
+        alert(`📄 Đã tạo hash cho file: ${file.name}\n\n🔐 Hash: ${hash}`)
+      } catch (error) {
+        alert('❌ Lỗi xử lý file: ' + error.message)
+      }
+      setLoading(false)
+    }
+  }
+
+  const registerDocument = async () => {
+    if (!contract) {
+      alert('⚠️ Vui lòng kết nối ví trước')
+      return
+    }
+    
+    if (!documentHash) {
+      alert('⚠️ Vui lòng upload file trước')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const tx = await contract.registerDocument(documentHash, documentType)
+      alert('⏳ Đang xác nhận giao dịch...')
       
+      await tx.wait()
+      alert('✅ Đăng ký giấy tờ thành công!')
+    } catch (error) {
+      console.error('Lỗi đăng ký:', error)
+      alert('❌ Lỗi đăng ký: ' + (error.reason || error.message))
+    }
+    setLoading(false)
+  }
+
+  const verifyDocument = async () => {
+    if (!documentHash) {
+      alert('⚠️ Vui lòng nhập hash giấy tờ')
+      return
+    }
+
+    try {
+      setLoading(true)
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
+      
+      const isVerified = await contractInstance.verifyDocument(documentHash)
+      setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
+    } catch (error) {
+      console.error('Lỗi xác minh:', error)
+      alert('❌ Lỗi xác minh: ' + (error.reason || error.message))
+    }
+    setLoading(false)
+  }
+
+  const clearResults = () => {
+    setDocumentHash('')
+    setFileName('')
+    setVerificationResult('')
+  }
+
+  return (
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h1 style={styles.title}>🆔 HỆ THỐNG XÁC THỰC GIẤY TỜ</h1>
+        <p style={styles.subtitle}>Blockchain Document Verification System</p>
+      </header>
+
       {!account ? (
-        <div>
-          {hasMetaMask ? (
-            <button 
-              onClick={connectWallet}
-              style={{
-                padding: '15px 30px',
-                fontSize: '18px',
-                backgroundColor: '#f6851b',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                margin: '20px'
-              }}
-            >
-              🔗 Kết nối MetaMask
-            </button>
-          ) : (
-            <div>
-              <p>⚠️ MetaMask không được tìm thấy</p>
-              <a 
-                href="https://metamask.io/download.html"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: '#f6851b',
-                  textDecoration: 'underline'
-                }}
-              >
-                Tải MetaMask tại đây
-              </a>
-            </div>
-          )}
+        <div style={styles.connectSection}>
+          <button onClick={connectWallet} style={styles.connectButton}>
+            🔗 Kết nối MetaMask
+          </button>
+          <p style={styles.note}>Kết nối ví để sử dụng hệ thống</p>
         </div>
       ) : (
-        <div style={{
-          background: 'white',
-          color: 'black',
-          padding: '20px',
-          borderRadius: '10px',
-          margin: '20px auto',
-          maxWidth: '500px'
-        }}>
-          <p>✅ <strong>Đã kết nối:</strong> {account}</p>
-          <p>🚀 Sẵn sàng xác thực giấy tờ!</p>
+        <div style={styles.mainContent}>
+          <div style={styles.accountInfo}>
+            <p>👤 <strong>Địa chỉ ví:</strong> {account}</p>
+            <p>🔄 <strong>Trạng thái:</strong> Đã kết nối</p>
+          </div>
+
+          {/* UPLOAD & REGISTER SECTION */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>📤 ĐĂNG KÝ GIẤY TỜ MỚI</h2>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Loại giấy tờ:</label>
+              <select 
+                value={documentType}
+                onChange={(e) => setDocumentType(e.target.value)}
+                style={styles.select}
+              >
+                <option value="CMND">CMND/CCCD</option>
+                <option value="BANG_LAI">Bằng lái xe</option>
+                <option value="HO_KHAU">Sổ hộ khẩu</option>
+                <option value="BANG_CAP">Bằng cấp</option>
+                <option value="HOP_DONG">Hợp đồng</option>
+              </select>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Chọn file giấy tờ:</label>
+              <input 
+                type="file" 
+                onChange={handleFileUpload}
+                style={styles.fileInput}
+                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                disabled={loading}
+              />
+              {fileName && <p style={styles.fileName}>📄 File: {fileName}</p>}
+            </div>
+
+            {documentHash && (
+              <div style={styles.hashDisplay}>
+                <p><strong>🔐 Hash:</strong></p>
+                <p style={styles.hashText}>{documentHash}</p>
+              </div>
+            )}
+
+            <button 
+              onClick={registerDocument}
+              disabled={loading || !documentHash}
+              style={{
+                ...styles.primaryButton,
+                ...((loading || !documentHash) && styles.disabledButton)
+              }}
+            >
+              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký giấy tờ'}
+            </button>
+          </div>
+
+          {/* VERIFY SECTION */}
+          <div style={styles.section}>
+            <h2 style={styles.sectionTitle}>🔍 XÁC MINH GIẤY TỜ</h2>
+            
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Hash giấy tờ cần xác minh:</label>
+              <input 
+                type="text"
+                placeholder="Dán mã hash tại đây..."
+                value={documentHash}
+                onChange={(e) => setDocumentHash(e.target.value)}
+                style={styles.input}
+              />
+            </div>
+
+            <div style={styles.buttonGroup}>
+              <button 
+                onClick={verifyDocument}
+                disabled={loading || !documentHash}
+                style={{
+                  ...styles.secondaryButton,
+                  ...((loading || !documentHash) && styles.disabledButton)
+                }}
+              >
+                {loading ? '⏳ Đang xác minh...' : '🔎 Xác minh'}
+              </button>
+              
+              <button 
+                onClick={clearResults}
+                style={styles.clearButton}
+              >
+                🗑️ Xóa
+              </button>
+            </div>
+
+            {verificationResult && (
+              <div style={{
+                ...styles.result,
+                ...(verificationResult.includes('HỢP LỆ') ? styles.validResult : styles.invalidResult)
+              }}>
+                <h3>KẾT QUẢ XÁC MINH</h3>
+                <p>{verificationResult}</p>
+                <p>Hash: {documentHash}</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      <footer style={styles.footer}>
+        <p>© 2024 Hệ thống xác thực giấy tờ sử dụng công nghệ Blockchain</p>
+      </footer>
     </div>
   )
 }
+
+// Styles
+const styles = {
+  container: {
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    padding: '20px',
+    fontFamily: 'Arial, sans-serif'
+  },
+  header: {
+    textAlign: 'center',
+    color: 'white',
+    marginBottom: '40px'
+  },
+  title: {
+    fontSize: '2.5rem',
+    margin: '0 0 10px 0',
+    textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+  },
+  subtitle: {
+    fontSize: '1.2rem',
+    opacity: 0.9,
+    margin: 0
+  },
+  connectSection: {
+    textAlign: 'center',
+    background: 'white',
+    padding: '40px',
+    borderRadius: '15px',
+    boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
+    maxWidth: '400px',
+    margin: '0 auto'
+  },
+  connectButton: {
+    padding: '15px 30px',
+    fontSize: '1.1rem',
+    backgroundColor: '#f6851b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    marginBottom: '15px',
+    width: '100%'
+  },
+  note: {
+    color: '#666',
+    fontSize: '0.9rem',
+    margin: 0
+  },
+  mainContent: {
+    maxWidth: '800px',
+    margin: '0 auto'
+  },
+  accountInfo: {
+    background: 'white',
+    padding: '20px',
+    borderRadius: '10px',
+    marginBottom: '20px',
+    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+    textAlign: 'center'
+  },
+  section: {
+    background: 'white',
+    padding: '30px',
+    borderRadius: '15px',
+    marginBottom: '20px',
+    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+  },
+  sectionTitle: {
+    color: '#2c3e50',
+    marginTop: 0,
+    borderBottom: '2px solid #f0f0f0',
+    paddingBottom: '15px',
+    textAlign: 'center'
+  },
+  formGroup: {
+    marginBottom: '20px'
+  },
+  label: {
+    display: 'block',
+    marginBottom: '8px',
+    fontWeight: 'bold',
+    color: '#333'
+  },
+  select: {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    fontSize: '1rem',
+    marginTop: '5px'
+  },
+  fileInput: {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    marginTop: '5px'
+  },
+  fileName: {
+    margin: '10px 0 0 0',
+    color: '#27ae60',
+    fontWeight: 'bold'
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    fontSize: '1rem',
+    marginTop: '5px'
+  },
+  hashDisplay: {
+    background: '#f8f9fa',
+    padding: '15px',
+    borderRadius: '8px',
+    marginBottom: '15px',
+    border: '1px solid #e9ecef'
+  },
+  hashText: {
+    wordBreak: 'break-all',
+    fontSize: '0.9rem',
+    fontFamily: 'monospace',
+    background: '#e9ecef',
+    padding: '10px',
+    borderRadius: '4px'
+  },
+  primaryButton: {
+    width: '100%',
+    padding: '15px',
+    backgroundColor: '#27ae60',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1.1rem',
+    cursor: 'pointer',
+    marginTop: '10px'
+  },
+  secondaryButton: {
+    padding: '15px 25px',
+    backgroundColor: '#3498db',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1.1rem',
+    cursor: 'pointer',
+    flex: 1
+  },
+  clearButton: {
+    padding: '15px 25px',
+    backgroundColor: '#e74c3c',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '1.1rem',
+    cursor: 'pointer',
+    marginLeft: '10px'
+  },
+  disabledButton: {
+    opacity: 0.6,
+    cursor: 'not-allowed'
+  },
+  buttonGroup: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '15px'
+  },
+  result: {
+    padding: '20px',
+    borderRadius: '8px',
+    textAlign: 'center',
+    marginTop: '20px',
+    border: '2px solid'
+  },
+  validResult: {
+    backgroundColor: '#d4edda',
+    color: '#155724',
+    borderColor: '#c3e6cb'
+  },
+  invalidResult: {
+    backgroundColor: '#f8d7da',
+    color: '#721c24',
+    borderColor: '#f5c6cb'
+  },
+  footer: {
+    textAlign: 'center',
+    color: 'white',
+    marginTop: '40px',
+    opacity: 0.8,
+    fontSize: '0.9rem'
+  }
+}
+
+// Note: Removed duplicate default export because the component is already exported
+// at its declaration: "export default function DocumentVerification() {"
