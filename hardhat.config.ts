@@ -28,11 +28,11 @@ export default defineConfig({
       type: "edr-simulated",
       chainType: "op",
     },
-    sepolia: {
+   rootstockTestnet: {
       type: "http",
-      chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url: "https://public-node.testnet.rsk.co",
+      accounts: [configVariable("RSK_PRIVATE_KEY")],
     },
+  
   },
 });

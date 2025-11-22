@@ -16,6 +16,7 @@
     "hardhat": "^3.0.15",
     "hardhat-deploy": "^1.0.4",
     "mocha": "^11.7.5",
+    "ts-node": "^10.9.2",
     "typescript": "~5.8.0"
   },
   "dependencies": {
