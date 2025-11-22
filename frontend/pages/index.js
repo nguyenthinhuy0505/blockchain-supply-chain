@@ -10,7 +10,7 @@ export default function DocumentVerification() {
   const [loading, setLoading] = useState(false)
   const [fileName, setFileName] = useState('')
 
-  // THAY BẰNG CONTRACT ADDRESS THẬT CỦA BẠN
+  // CONTRACT ADDRESS THẬT
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
   const contractABI = [
@@ -21,7 +21,6 @@ export default function DocumentVerification() {
   ]
 
   useEffect(() => {
-    // Kiểm tra MetaMask
     if (typeof window.ethereum !== 'undefined') {
       initContract()
     }
@@ -41,12 +40,36 @@ export default function DocumentVerification() {
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
+        // TỰ ĐỘNG KẾT NỐI ROOTSTOCK TESTNET
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x1F' }],
+          })
+        } catch (switchError) {
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x1F',
+                chainName: 'Rootstock Testnet',
+                rpcUrls: ['https://public-node.testnet.rsk.co'],
+                blockExplorerUrls: ['https://explorer.testnet.rsk.co'],
+                nativeCurrency: {
+                  name: 'tRBTC',
+                  symbol: 'tRBTC',
+                  decimals: 18
+                },
+              }],
+            })
+          }
+        }
+
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         })
         setAccount(accounts[0])
         
-        // Khởi tạo contract sau khi kết nối ví
         const provider = new ethers.BrowserProvider(window.ethereum)
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
@@ -113,11 +136,15 @@ export default function DocumentVerification() {
 
     try {
       setLoading(true)
-      const tx = await contract.registerDocument(documentHash, documentType)
-      alert('⏳ Đang xác nhận giao dịch...')
+      // GAS OPTIMIZED - giảm gas fee
+      const tx = await contract.registerDocument(documentHash, documentType, {
+        gasLimit: 80000
+      })
+      
+      alert('⏳ Đang xác nhận giao dịch...\n💸 Gas fee: ~0.000008 tRBTC')
       
       await tx.wait()
-      alert('✅ Đăng ký giấy tờ thành công!')
+      alert('✅ Đăng ký giấy tờ thành công!\n📄 Giấy tờ đã được lưu trên blockchain')
     } catch (error) {
       console.error('Lỗi đăng ký:', error)
       alert('❌ Lỗi đăng ký: ' + (error.reason || error.message))
@@ -164,12 +191,26 @@ export default function DocumentVerification() {
             🔗 Kết nối MetaMask
           </button>
           <p style={styles.note}>Kết nối ví để sử dụng hệ thống</p>
+          
+          <div style={styles.gasInfo}>
+            <p>💡 <strong>Thông tin gas fee:</strong></p>
+            <p>• Đăng ký giấy tờ: ~0.000008 tRBTC</p>
+            <p>• Xác minh: Miễn phí (chỉ đọc)</p>
+            <p>🆓 <strong>Nhận tRBTC miễn phí:</strong> <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Rootstock Faucet</a></p>
+          </div>
         </div>
       ) : (
         <div style={styles.mainContent}>
           <div style={styles.accountInfo}>
             <p>👤 <strong>Địa chỉ ví:</strong> {account}</p>
+            <p>🌐 <strong>Network:</strong> Rootstock Testnet</p>
             <p>🔄 <strong>Trạng thái:</strong> Đã kết nối</p>
+          </div>
+
+          {/* GAS FEE INFO */}
+          <div style={styles.gasInfo}>
+            <p>💰 <strong>Thông tin phí:</strong> Đăng ký giấy tờ tốn ~0.000008 tRBTC | Xác minh miễn phí</p>
+            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Nhận tRBTC miễn phí tại đây</a></p>
           </div>
 
           {/* UPLOAD & REGISTER SECTION */}
@@ -207,6 +248,7 @@ export default function DocumentVerification() {
               <div style={styles.hashDisplay}>
                 <p><strong>🔐 Hash:</strong></p>
                 <p style={styles.hashText}>{documentHash}</p>
+                <p style={styles.noteText}><small>Lưu hash này để xác minh sau</small></p>
               </div>
             )}
 
@@ -218,7 +260,7 @@ export default function DocumentVerification() {
                 ...((loading || !documentHash) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký giấy tờ'}
+              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký giấy tờ (0.000008 tRBTC)'}
             </button>
           </div>
 
@@ -246,7 +288,7 @@ export default function DocumentVerification() {
                   ...((loading || !documentHash) && styles.disabledButton)
                 }}
               >
-                {loading ? '⏳ Đang xác minh...' : '🔎 Xác minh'}
+                {loading ? '⏳ Đang xác minh...' : '🔎 Xác minh (MIỄN PHÍ)'}
               </button>
               
               <button 
@@ -263,8 +305,9 @@ export default function DocumentVerification() {
                 ...(verificationResult.includes('HỢP LỆ') ? styles.validResult : styles.invalidResult)
               }}>
                 <h3>KẾT QUẢ XÁC MINH</h3>
-                <p>{verificationResult}</p>
-                <p>Hash: {documentHash}</p>
+                <p style={styles.resultText}>{verificationResult}</p>
+                <p><strong>Hash:</strong> {documentHash}</p>
+                <p><strong>Thời gian:</strong> {new Date().toLocaleString()}</p>
               </div>
             )}
           </div>
@@ -272,7 +315,8 @@ export default function DocumentVerification() {
       )}
 
       <footer style={styles.footer}>
-        <p>© 2024 Hệ thống xác thực giấy tờ sử dụng công nghệ Blockchain</p>
+        <p>© 2024 Hệ thống xác thực giấy tờ sử dụng công nghệ Blockchain - Rootstock Testnet</p>
+        <p>Gas fee: ~0.000008 tRBTC per transaction | Testnet token - No real value</p>
       </footer>
     </div>
   )
@@ -307,7 +351,7 @@ const styles = {
     padding: '40px',
     borderRadius: '15px',
     boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-    maxWidth: '400px',
+    maxWidth: '500px',
     margin: '0 auto'
   },
   connectButton: {
@@ -324,7 +368,19 @@ const styles = {
   note: {
     color: '#666',
     fontSize: '0.9rem',
-    margin: 0
+    margin: '0 0 20px 0'
+  },
+  gasInfo: {
+    background: '#e8f5e8',
+    border: '1px solid #4caf50',
+    padding: '15px',
+    borderRadius: '8px',
+    margin: '15px 0',
+    textAlign: 'left'
+  },
+  link: {
+    color: '#2196f3',
+    textDecoration: 'none'
   },
   mainContent: {
     maxWidth: '800px',
@@ -402,7 +458,13 @@ const styles = {
     fontFamily: 'monospace',
     background: '#e9ecef',
     padding: '10px',
-    borderRadius: '4px'
+    borderRadius: '4px',
+    margin: '10px 0'
+  },
+  noteText: {
+    color: '#666',
+    fontSize: '0.8rem',
+    margin: '5px 0 0 0'
   },
   primaryButton: {
     width: '100%',
@@ -451,6 +513,11 @@ const styles = {
     marginTop: '20px',
     border: '2px solid'
   },
+  resultText: {
+    fontSize: '1.2rem',
+    fontWeight: 'bold',
+    margin: '10px 0'
+  },
   validResult: {
     backgroundColor: '#d4edda',
     color: '#155724',
@@ -469,6 +536,3 @@ const styles = {
     fontSize: '0.9rem'
   }
 }
-
-// Note: Removed duplicate default export because the component is already exported
-// at its declaration: "export default function DocumentVerification() {"
