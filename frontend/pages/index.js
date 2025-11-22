@@ -9,141 +9,45 @@ export default function DocumentVerification() {
   const [verificationResult, setVerificationResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [fileName, setFileName] = useState('')
-  const [networkStatus, setNetworkStatus] = useState('Đang kết nối...')
-  const [rpcStatus, setRpcStatus] = useState('')
+  const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
 
-  // CONTRACT ADDRESS THẬT
+  // GIỮ NGUYÊN CONTRACT ROOTSTOCK
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
   const contractABI = [
     "function registerDocument(string _documentHash, string _documentType) public",
     "function verifyDocument(string _documentHash) public view returns (bool)",
     "function getUserDocuments(address _user) public view returns (string[] memory)",
-    "function documents(string) public view returns (string documentHash, address owner, uint256 timestamp, string documentType, bool verified)",
     "event DocumentRegistered(string indexed documentHash, address indexed owner)"
   ]
-
-  // DANH SÁCH RPC BACKUP
-  const rpcEndpoints = [
-    {
-      url: 'https://public-node.testnet.rsk.co',
-      name: 'Public Node'
-    },
-    {
-      url: 'https://mycrypto.testnet.rsk.co', 
-      name: 'MyCrypto'
-    },
-    {
-      url: 'https://rootstock-testnet.rsk.co',
-      name: 'Rootstock Backup'
-    }
-  ]
-
-  useEffect(() => {
-    if (typeof window.ethereum !== 'undefined') {
-      checkNetworkStatus()
-    }
-  }, [])
-
-  const checkNetworkStatus = async () => {
-    for (let rpc of rpcEndpoints) {
-      try {
-        const customProvider = new ethers.JsonRpcProvider(rpc.url)
-        const network = await customProvider.getNetwork()
-        const block = await customProvider.getBlockNumber()
-        setRpcStatus(`✅ ${rpc.name} - Block: ${block}`)
-        break
-      } catch (error) {
-        setRpcStatus(`❌ ${rpc.name} - Đang thử RPC khác...`)
-        continue
-      }
-    }
-  }
-
-  const initContract = async () => {
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const signer = await provider.getSigner()
-      const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
-      setContract(contractInstance)
-    } catch (error) {
-      console.log('Contract chưa khởi tạo')
-    }
-  }
 
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
-        setNetworkStatus('🔄 Đang kết nối Rootstock Testnet...')
+        setStatus('🔄 Đang kết nối Rootstock...')
 
-        let connected = false
-        
-        // THỬ TỪNG RPC ENDPOINT
-        for (let rpc of rpcEndpoints) {
-          try {
-            setRpcStatus(`🔄 Đang thử: ${rpc.name}`)
-            
-            // THÊM NETWORK VÀO METAMASK
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x1F',
-                chainName: 'Rootstock Testnet',
-                rpcUrls: [rpc.url],
-                blockExplorerUrls: ['https://explorer.testnet.rsk.co'],
-                nativeCurrency: {
-                  name: 'tRBTC',
-                  symbol: 'tRBTC',
-                  decimals: 18
-                },
-              }],
-            })
-
-            // CHUYỂN SANG NETWORK
-            await window.ethereum.request({
-              method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0x1F' }],
-            })
-
-            setRpcStatus(`✅ Đã kết nối: ${rpc.name}`)
-            connected = true
-            break
-
-          } catch (error) {
-            console.log(`RPC ${rpc.name} failed:`, error)
-            setRpcStatus(`❌ Thất bại: ${rpc.name}`)
-            continue
-          }
-        }
-
-        if (!connected) {
-          setNetworkStatus('❌ Tất cả RPC đều thất bại')
-          alert('❌ Không thể kết nối đến Rootstock. Vui lòng thử lại sau.')
-          return
-        }
-
+        // ĐƠN GIẢN - CHỈ KẾT NỐI VÍ, KHÔNG THÊM NETWORK
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         })
         setAccount(accounts[0])
         
+        // DÙNG PROVIDER TRỰC TIẾP
         const provider = new ethers.BrowserProvider(window.ethereum)
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
-
-        const network = await provider.getNetwork()
-        const block = await provider.getBlockNumber()
-        setNetworkStatus(`✅ Đã kết nối - Block: ${block}`)
         
-        alert(`✅ Đã kết nối Rootstock: ${accounts[0]}`)
+        setStatus('✅ Đã kết nối ví')
+        alert(`✅ Đã kết nối: ${accounts[0]}\n\n🔧 Vui lòng đảm bảo MetaMask đang ở Rootstock Testnet`)
+
       } catch (error) {
         if (error.code === 4001) {
-          setNetworkStatus('❌ Người dùng từ chối kết nối')
-          alert('❌ Người dùng từ chối kết nối')
+          setStatus('❌ Từ chối kết nối')
+          alert('❌ Bạn đã từ chối kết nối ví')
         } else {
-          setNetworkStatus('❌ Lỗi kết nối')
-          alert('❌ Lỗi kết nối: ' + error.message)
+          setStatus('❌ Lỗi kết nối')
+          alert('❌ Lỗi: ' + error.message + '\n\n💡 Mẹo: Kiểm tra xem MetaMask có ở Rootstock Testnet không?')
         }
       }
     } else {
@@ -178,96 +82,51 @@ export default function DocumentVerification() {
         const hash = await calculateFileHash(file)
         setDocumentHash(hash)
         setFileName(file.name)
-        alert(`📄 Đã tạo hash cho file: ${file.name}\n\n🔐 Hash: ${hash}`)
+        alert(`📄 Đã tạo hash: ${file.name}\n\n🔐 ${hash}`)
       } catch (error) {
-        alert('❌ Lỗi xử lý file: ' + error.message)
+        alert('❌ Lỗi file: ' + error.message)
       }
       setLoading(false)
     }
   }
 
-  const checkDocumentExists = async (hash) => {
-    try {
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const readContract = new ethers.Contract(contractAddress, contractABI, provider)
-      const document = await readContract.documents(hash)
-      return document.owner !== ethers.ZeroAddress
-    } catch (error) {
-      return false
-    }
-  }
-
   const registerDocument = async () => {
     if (!contract) {
-      alert('⚠️ Vui lòng kết nối ví trước')
+      alert('⚠️ Kết nối ví trước')
       return
     }
     
     if (!documentHash) {
-      alert('⚠️ Vui lòng upload file trước')
+      alert('⚠️ Upload file trước')
       return
     }
 
     try {
       setLoading(true)
-      setNetworkStatus('🔄 Đang gửi transaction...')
+      setStatus('🔄 Đang gửi transaction...')
 
-      // KIỂM TRA DOCUMENT ĐÃ TỒN TẠI
-      const exists = await checkDocumentExists(documentHash)
-      if (exists) {
-        alert('❌ Document đã được đăng ký trước đó!')
-        setLoading(false)
-        return
-      }
-
-      // THỬ NHIỀU LẦN NẾU CẦN
-      let retries = 3
-      let success = false
-      let lastError = ''
-
-      for (let i = 0; i < retries; i++) {
-        try {
-          const tx = await contract.registerDocument(documentHash, documentType, {
-            gasLimit: 200000,
-          })
-          
-          setNetworkStatus(`🔄 Đang xác nhận... (Thử ${i + 1}/${retries})`)
-          alert(`⏳ Đang xác nhận giao dịch...\n💸 Gas fee: ~0.00002 tRBTC\n\nThử: ${i + 1}/${retries}`)
-          
-          const receipt = await tx.wait()
-          console.log('Transaction receipt:', receipt)
-          
-          success = true
-          break
-        } catch (error) {
-          lastError = error
-          console.log(`Transaction attempt ${i + 1} failed:`, error)
-          if (i < retries - 1) {
-            await new Promise(resolve => setTimeout(resolve, 2000)) // Chờ 2 giây
-          }
-        }
-      }
-
-      if (success) {
-        setNetworkStatus('✅ Transaction thành công')
-        alert('✅ Đăng ký giấy tờ thành công!\n📄 Giấy tờ đã được lưu trên blockchain')
-      } else {
-        setNetworkStatus('❌ Transaction thất bại')
-        throw lastError
-      }
+      const tx = await contract.registerDocument(documentHash, documentType, {
+        gasLimit: 200000,
+      })
+      
+      alert('⏳ Đang xác nhận...\n💸 Phí: ~0.00002 tRBTC')
+      
+      await tx.wait()
+      setStatus('✅ Đăng ký thành công')
+      alert('✅ Thành công! Giấy tờ đã lưu trên blockchain')
 
     } catch (error) {
-      console.error('Lỗi đăng ký:', error)
-      setNetworkStatus('❌ Lỗi transaction')
+      console.error('Lỗi:', error)
+      setStatus('❌ Lỗi transaction')
       
       if (error.reason) {
-        alert('❌ Lỗi từ contract: ' + error.reason)
+        alert('❌ Lỗi contract: ' + error.reason)
       } else if (error.code === 'INSUFFICIENT_FUNDS') {
-        alert('❌ Không đủ tRBTC! Vào faucet nhận thêm:\nhttps://faucet.testnet.rsk.co')
-      } else if (error.message.includes('RPC endpoint')) {
-        alert('❌ Lỗi kết nối RPC. Vui lòng thử lại sau hoặc refresh trang.')
+        alert('❌ Hết tRBTC! Vào faucet:\nhttps://faucet.testnet.rsk.co')
+      } else if (error.message.includes('RPC')) {
+        alert('❌ Lỗi kết nối RPC\n\n💡 Thử:\n1. Refresh trang\n2. Đổi RPC trong MetaMask\n3. Thử lại sau')
       } else {
-        alert('❌ Lỗi đăng ký: ' + error.message)
+        alert('❌ Lỗi: ' + error.message)
       }
     }
     setLoading(false)
@@ -275,7 +134,7 @@ export default function DocumentVerification() {
 
   const verifyDocument = async () => {
     if (!documentHash) {
-      alert('⚠️ Vui lòng nhập hash giấy tờ')
+      alert('⚠️ Nhập hash trước')
       return
     }
 
@@ -287,7 +146,6 @@ export default function DocumentVerification() {
       const isVerified = await contractInstance.verifyDocument(documentHash)
       setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
     } catch (error) {
-      console.error('Lỗi xác minh:', error)
       alert('❌ Lỗi xác minh: ' + error.message)
     }
     setLoading(false)
@@ -299,66 +157,54 @@ export default function DocumentVerification() {
     setVerificationResult('')
   }
 
-  const refreshConnection = async () => {
-    setNetworkStatus('🔄 Đang làm mới kết nối...')
-    await checkNetworkStatus()
-    if (account) {
-      await initContract()
-    }
-    setNetworkStatus('✅ Đã làm mới kết nối')
-  }
-
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1 style={styles.title}>🆔 HỆ THỐNG XÁC THỰC GIẤY TỜ</h1>
-        <p style={styles.subtitle}>Rootstock Blockchain - Document Verification</p>
-        <div style={styles.statusBar}>
-          <p style={styles.networkStatus}>🌐 {networkStatus}</p>
-          <p style={styles.rpcStatus}>🔗 {rpcStatus}</p>
-          <button onClick={refreshConnection} style={styles.refreshButton}>
-            🔄 Làm mới
-          </button>
-        </div>
+        <h1 style={styles.title}>🆔 XÁC THỰC GIẤY TỜ</h1>
+        <p style={styles.subtitle}>Rootstock Blockchain</p>
+        <p style={styles.status}>{status}</p>
       </header>
 
       {!account ? (
         <div style={styles.connectSection}>
           <button onClick={connectWallet} style={styles.connectButton}>
-            🔗 Kết nối Rootstock Testnet
+            🔗 Kết nối Rootstock
           </button>
-          <p style={styles.note}>Kết nối ví để sử dụng hệ thống</p>
+          <p style={styles.note}>Đảm bảo MetaMask đang ở Rootstock Testnet</p>
           
+          <div style={styles.info}>
+            <p>💡 <strong>Cài đặt Rootstock trong MetaMask:</strong></p>
+            <p>Network Name: <strong>Rootstock Testnet</strong></p>
+            <p>RPC URL: <strong>https://public-node.testnet.rsk.co</strong></p>
+            <p>Chain ID: <strong>31</strong></p>
+            <p>Symbol: <strong>tRBTC</strong></p>
+            <p>Block Explorer: <strong>https://explorer.testnet.rsk.co</strong></p>
+          </div>
+
           <div style={styles.gasInfo}>
-            <p>💡 <strong>Thông tin:</strong></p>
-            <p>• Đang sử dụng <strong>Rootstock Testnet</strong></p>
-            <p>• Đăng ký giấy tờ: ~0.00002 tRBTC</p>
-            <p>• Xác minh: Miễn phí</p>
-            <p>• Tự động thử nhiều RPC endpoints</p>
-            <p>🆓 <strong>Nhận tRBTC miễn phí:</strong> <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Rootstock Faucet</a></p>
+            <p>📦 Đăng ký: ~0.00002 tRBTC</p>
+            <p>🔍 Xác minh: Miễn phí</p>
+            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Nhận tRBTC miễn phí</a></p>
           </div>
         </div>
       ) : (
         <div style={styles.mainContent}>
           <div style={styles.accountInfo}>
-            <p>👤 <strong>Địa chỉ ví:</strong> {account}</p>
-            <p>🌐 <strong>Trạng thái:</strong> {networkStatus}</p>
-            <p>🔗 <strong>RPC:</strong> {rpcStatus}</p>
+            <p>👤 Ví: {account}</p>
+            <p>🌐 Rootstock Testnet</p>
+            <p>📊 {status}</p>
           </div>
 
-          {/* GAS FEE INFO */}
           <div style={styles.gasInfo}>
-            <p>💰 <strong>Thông tin phí:</strong> Đăng ký giấy tờ tốn ~0.00002 tRBTC | Xác minh miễn phí</p>
-            <p>🔄 <strong>Tự động retry 3 lần</strong> nếu có lỗi RPC</p>
-            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Nhận tRBTC miễn phí tại đây</a></p>
+            <p>💰 Phí: ~0.00002 tRBTC | Xác minh miễn phí</p>
+            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" style={styles.link}>Nhận tRBTC tại đây</a></p>
           </div>
 
-          {/* UPLOAD & REGISTER SECTION */}
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>📤 ĐĂNG KÝ GIẤY TỜ MỚI</h2>
+            <h2>📤 ĐĂNG KÝ GIẤY TỜ MỚI</h2>
             
             <div style={styles.formGroup}>
-              <label style={styles.label}>Loại giấy tờ:</label>
+              <label>Loại giấy tờ:</label>
               <select 
                 value={documentType}
                 onChange={(e) => setDocumentType(e.target.value)}
@@ -373,7 +219,7 @@ export default function DocumentVerification() {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Chọn file giấy tờ:</label>
+              <label>Chọn file:</label>
               <input 
                 type="file" 
                 onChange={handleFileUpload}
@@ -381,14 +227,14 @@ export default function DocumentVerification() {
                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                 disabled={loading}
               />
-              {fileName && <p style={styles.fileName}>📄 File: {fileName}</p>}
+              {fileName && <p style={styles.fileName}>📄 {fileName}</p>}
             </div>
 
             {documentHash && (
               <div style={styles.hashDisplay}>
                 <p><strong>🔐 Hash:</strong></p>
                 <p style={styles.hashText}>{documentHash}</p>
-                <p style={styles.noteText}><small>Lưu hash này để xác minh sau</small></p>
+                <p style={styles.noteText}><small>Lưu hash để xác minh sau</small></p>
               </div>
             )}
 
@@ -400,19 +246,18 @@ export default function DocumentVerification() {
                 ...((loading || !documentHash) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký giấy tờ (0.00002 tRBTC)'}
+              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký (0.00002 tRBTC)'}
             </button>
           </div>
 
-          {/* VERIFY SECTION */}
           <div style={styles.section}>
-            <h2 style={styles.sectionTitle}>🔍 XÁC MINH GIẤY TỜ</h2>
+            <h2>🔍 XÁC MINH GIẤY TỜ</h2>
             
             <div style={styles.formGroup}>
-              <label style={styles.label}>Hash giấy tờ cần xác minh:</label>
+              <label>Hash giấy tờ:</label>
               <input 
                 type="text"
-                placeholder="Dán mã hash tại đây..."
+                placeholder="Dán hash tại đây..."
                 value={documentHash}
                 onChange={(e) => setDocumentHash(e.target.value)}
                 style={styles.input}
@@ -431,10 +276,7 @@ export default function DocumentVerification() {
                 {loading ? '⏳ Đang xác minh...' : '🔎 Xác minh (MIỄN PHÍ)'}
               </button>
               
-              <button 
-                onClick={clearResults}
-                style={styles.clearButton}
-              >
+              <button onClick={clearResults} style={styles.clearButton}>
                 🗑️ Xóa
               </button>
             </div>
@@ -444,7 +286,7 @@ export default function DocumentVerification() {
                 ...styles.result,
                 ...(verificationResult.includes('HỢP LỆ') ? styles.validResult : styles.invalidResult)
               }}>
-                <h3>KẾT QUẢ XÁC MINH</h3>
+                <h3>KẾT QUẢ</h3>
                 <p style={styles.resultText}>{verificationResult}</p>
                 <p><strong>Hash:</strong> {documentHash}</p>
                 <p><strong>Thời gian:</strong> {new Date().toLocaleString()}</p>
@@ -456,7 +298,6 @@ export default function DocumentVerification() {
 
       <footer style={styles.footer}>
         <p>© 2024 Hệ thống xác thực giấy tờ - Rootstock Testnet</p>
-        <p>Auto-retry RPC endpoints | Multiple backup connections</p>
       </footer>
     </div>
   )
@@ -485,31 +326,10 @@ const styles = {
     opacity: 0.9,
     margin: 0
   },
-  statusBar: {
-    background: 'rgba(255,255,255,0.1)',
-    padding: '15px',
-    borderRadius: '10px',
-    marginTop: '20px'
-  },
-  networkStatus: {
+  status: {
     fontSize: '1rem',
-    margin: '5px 0',
+    margin: '10px 0 0 0',
     fontWeight: 'bold'
-  },
-  rpcStatus: {
-    fontSize: '0.9rem',
-    margin: '5px 0',
-    opacity: 0.9
-  },
-  refreshButton: {
-    padding: '8px 16px',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    color: 'white',
-    border: '1px solid rgba(255,255,255,0.3)',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '0.9rem',
-    marginTop: '10px'
   },
   connectSection: {
     textAlign: 'center',
@@ -535,6 +355,15 @@ const styles = {
     color: '#666',
     fontSize: '0.9rem',
     margin: '0 0 20px 0'
+  },
+  info: {
+    background: '#e3f2fd',
+    border: '1px solid #2196f3',
+    padding: '15px',
+    borderRadius: '8px',
+    margin: '15px 0',
+    textAlign: 'left',
+    fontSize: '0.9rem'
   },
   gasInfo: {
     background: '#e8f5e8',
@@ -566,13 +395,6 @@ const styles = {
     borderRadius: '15px',
     marginBottom: '20px',
     boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
-  },
-  sectionTitle: {
-    color: '#2c3e50',
-    marginTop: 0,
-    borderBottom: '2px solid #f0f0f0',
-    paddingBottom: '15px',
-    textAlign: 'center'
   },
   formGroup: {
     marginBottom: '20px'
