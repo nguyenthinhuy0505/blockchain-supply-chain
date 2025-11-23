@@ -11,7 +11,7 @@ export default function DocumentVerification() {
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [balance, setBalance] = useState('0')
-  const [gasPrice, setGasPrice] = useState('0.01')
+  const [gasPrice, setGasPrice] = useState('0.5') // Giảm xuống 0.5 gwei để phí rẻ hơn
 
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
@@ -27,7 +27,7 @@ export default function DocumentVerification() {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const balance = await provider.getBalance(address)
       const balanceInRBTC = ethers.formatUnits(balance, 18)
-      setBalance(parseFloat(balanceInRBTC).toFixed(8))
+      setBalance(parseFloat(balanceInRBTC).toFixed(6)) // Hiển thị 6 số thập phân
       return parseFloat(balanceInRBTC)
     } catch (error) {
       return 0
@@ -127,10 +127,10 @@ export default function DocumentVerification() {
 
     // Kiểm tra số dư
     const currentBalance = await checkBalance(account)
-    const minBalance = 0.00001
+    const minBalance = 0.00015 // Giảm xuống 0.00015 tRBTC
     
     if (currentBalance < minBalance) {
-      alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${balance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
+      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${balance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\nBạn có thể thử ~${Math.floor(currentBalance / 0.00015)} lần đăng ký`)
       return
     }
 
@@ -141,11 +141,11 @@ export default function DocumentVerification() {
       // Hiển thị số dư trước khi trừ
       const balanceBefore = await checkBalance(account)
       
-      // GAS PRICE CỰC THẤP - 0.01 gwei
+      // Sử dụng gas price từ state (0.5 gwei)
       const gasPriceWei = ethers.parseUnits(gasPrice, 'gwei')
       
-      // Gas limit thấp nhất có thể
-      const gasLimit = 80000
+      // Gas limit vừa phải
+      const gasLimit = 100000
       
       const tx = await contract.registerDocument(documentHash, documentType, {
         gasLimit: gasLimit,
@@ -156,7 +156,7 @@ export default function DocumentVerification() {
       const estimatedCost = gasLimit * gasPriceWei
       const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
       
-      alert(`⏳ Đang xác nhận...\n💰 Số dư trước: ${balanceBefore} tRBTC\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC`)
+      alert(`⏳ Đang xác nhận...\n💰 Số dư: ${balanceBefore} tRBTC\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC\n⚡ Gas: ${gasPrice} gwei`)
       
       const receipt = await tx.wait()
       
@@ -168,7 +168,7 @@ export default function DocumentVerification() {
       const balanceAfter = await checkBalance(account)
       
       setStatus('✅ Đăng ký thành công!')
-      alert(`🎉 THÀNH CÔNG!\n\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n💰 Số dư trước: ${balanceBefore} tRBTC\n💰 Số dư sau: ${balanceAfter} tRBTC\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
+      alert(`🎉 THÀNH CÔNG!\n\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n💰 Số dư trước: ${balanceBefore} tRBTC\n💰 Số dư sau: ${balanceAfter} tRBTC\n📉 Giảm: ${(balanceBefore - balanceAfter).toFixed(6)} tRBTC\n\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
 
     } catch (error) {
       console.error('Lỗi transaction:', error)
@@ -176,12 +176,12 @@ export default function DocumentVerification() {
       
       if (error.code === 'INSUFFICIENT_FUNDS') {
         const currentBalance = await checkBalance(account)
-        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần thêm: ${(0.00001 - currentBalance).toFixed(8)} tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
+        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần thêm: ${(0.00015 - currentBalance).toFixed(6)} tRBTC\n\n🆓 Vui lòng nhận thêm test token!`)
       } else if (error.code === 'ACTION_REJECTED') {
         alert('❌ Bạn đã từ chối transaction')
       } else if (error.message.includes('gas')) {
-        // Tăng gas price nếu lỗi
-        const suggestedGas = (parseFloat(gasPrice) * 10).toFixed(3)
+        // Tăng gas price ít hơn nếu lỗi
+        const suggestedGas = (parseFloat(gasPrice) * 1.5).toFixed(1)
         alert(`❌ Lỗi gas! Tự động tăng gas price lên ${suggestedGas} gwei.`)
         setGasPrice(suggestedGas)
       } else if (error.message.includes('execution reverted')) {
@@ -227,24 +227,20 @@ export default function DocumentVerification() {
     window.open('https://faucet.testnet.rsk.co', '_blank')
   }
 
-  const viewOnExplorer = () => {
-    window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
-  }
-
-  // Gas price options cực thấp
+  // Gas price options cho số dư 0.002 tRBTC
   const gasPriceOptions = [
-    { value: '0.01', label: '0.01 gwei (Cực rẻ - ~0.000008 tRBTC)' },
-    { value: '0.05', label: '0.05 gwei (Rất rẻ - ~0.00004 tRBTC)' },
-    { value: '0.1', label: '0.1 gwei (Rẻ - ~0.00008 tRBTC)' },
-    { value: '0.5', label: '0.5 gwei (Trung bình - ~0.0004 tRBTC)' },
-    { value: '1', label: '1 gwei (Cao - ~0.0008 tRBTC)' }
+    { value: '0.3', label: '0.3 gwei (Rất rẻ - ~0.00003 tRBTC)' },
+    { value: '0.5', label: '0.5 gwei (Rẻ - ~0.00005 tRBTC)' },
+    { value: '1', label: '1 gwei (Trung bình - ~0.0001 tRBTC)' },
+    { value: '2', label: '2 gwei (Cao - ~0.0002 tRBTC)' },
+    { value: '3', label: '3 gwei (Rất cao - ~0.0003 tRBTC)' }
   ]
 
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>🆔 XÁC THỰC GIẤY TỜ</h1>
-        <p style={styles.subtitle}>Rootstock Testnet | Phí cực rẻ: ~0.00001 tRBTC</p>
+        <p style={styles.subtitle}>Rootstock Testnet | Phí phù hợp: ~0.0001 tRBTC</p>
         <p style={styles.status}>{status}</p>
       </header>
 
@@ -255,16 +251,16 @@ export default function DocumentVerification() {
           </button>
           
           <div style={styles.info}>
-            <p>💡 <strong>Phí cực rẻ:</strong></p>
-            <p>• Đăng ký: <strong>~0.00001 tRBTC</strong></p>
+            <p>💡 <strong>Với số dư ~0.002 tRBTC:</strong></p>
+            <p>• Đăng ký: <strong>~0.0001-0.0002 tRBTC</strong></p>
             <p>• Xác minh: <strong>MIỄN PHÍ</strong></p>
-            <p>• Chỉ cần: <strong>0.01 tRBTC</strong> để test nhiều lần</p>
+            <p>• Có thể test: <strong>10-15 lần</strong></p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>🆓 <strong>NHẬN TEST TOKEN MIỄN PHÍ:</strong></p>
+            <p>🆓 <strong>NHẬN THÊM TEST TOKEN:</strong></p>
             <button onClick={getTestRBTC} style={styles.faucetButton}>
-              🚰 Nhận 0.01 tRBTC tại Rootstock Faucet
+              🚰 Nhận thêm tRBTC tại Rootstock Faucet
             </button>
           </div>
         </div>
@@ -276,9 +272,9 @@ export default function DocumentVerification() {
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
             
-            {parseFloat(balance) < 0.0001 && (
+            {parseFloat(balance) < 0.001 && (
               <div style={styles.warning}>
-                <p>⚠️ Số dư thấp! Đủ cho {Math.floor(parseFloat(balance) / 0.00001)} lần đăng ký</p>
+                <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.00015)} lần đăng ký</p>
                 <button onClick={getTestRBTC} style={styles.smallButton}>
                   🚰 Nhận thêm tRBTC
                 </button>
@@ -287,7 +283,7 @@ export default function DocumentVerification() {
           </div>
 
           <div style={styles.gasSettings}>
-            <label style={styles.label}>⚡ Gas Price (Phí ~0.00001 tRBTC):</label>
+            <label style={styles.label}>⚡ Gas Price (Phí ~0.0001 tRBTC):</label>
             <select 
               value={gasPrice}
               onChange={(e) => setGasPrice(e.target.value)}
@@ -299,11 +295,11 @@ export default function DocumentVerification() {
                 </option>
               ))}
             </select>
-            <p style={styles.noteText}>💡 Bắt đầu với 0.01 gwei - Rẻ nhất!</p>
+            <p style={styles.noteText}>💡 Chọn 0.5 gwei để tiết kiệm với số dư {balance} tRBTC</p>
           </div>
 
           <div style={styles.section}>
-            <h2>📤 ĐĂNG KÝ GIẤY TỜ MỚI (Phí: ~0.00001 tRBTC)</h2>
+            <h2>📤 ĐĂNG KÝ GIẤY TỜ MỚI (Phí: ~0.0001 tRBTC)</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Loại giấy tờ:</label>
@@ -341,17 +337,17 @@ export default function DocumentVerification() {
 
             <button 
               onClick={registerDocument}
-              disabled={loading || !documentHash || parseFloat(balance) < 0.00001}
+              disabled={loading || !documentHash || parseFloat(balance) < 0.00015}
               style={{
                 ...styles.primaryButton,
-                ...((loading || !documentHash || parseFloat(balance) < 0.00001) && styles.disabledButton)
+                ...((loading || !documentHash || parseFloat(balance) < 0.00015) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký (Phí ~0.00001 tRBTC)`}
+              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký (Phí ~0.0001 tRBTC)`}
             </button>
 
-            {parseFloat(balance) < 0.00001 && (
-              <p style={styles.errorText}>❌ Cần ít nhất 0.00001 tRBTC</p>
+            {parseFloat(balance) < 0.00015 && (
+              <p style={styles.errorText}>❌ Cần ít nhất 0.00015 tRBTC</p>
             )}
           </div>
 
@@ -403,7 +399,7 @@ export default function DocumentVerification() {
 
       <footer style={styles.footer}>
         <p>© 2024 Hệ thống xác thực giấy tờ - Rootstock Testnet</p>
-        <p>💰 Phí cực rẻ: ~0.00001 tRBTC | 🆓 Xác minh: Miễn phí</p>
+        <p>💰 Phí phù hợp: ~0.0001 tRBTC | 🆓 Xác minh: Miễn phí | Số dư: {balance} tRBTC</p>
       </footer>
     </div>
   )
