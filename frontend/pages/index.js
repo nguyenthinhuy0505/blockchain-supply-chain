@@ -21,8 +21,8 @@ export default function DocumentVerification() {
     hasSufficientBalance: false
   })
 
-  // ✅ CONSTANTS
-  const MINIMUM_BALANCE = 0.0001
+  // ✅ CONSTANTS - GIẢM NGƯỠNG TỐI THIỂU
+  const MINIMUM_BALANCE = 0.00005 // Giảm xuống còn 0.00005
   const ESTIMATED_REGISTER_COST = 0.0003
   const ESTIMATED_VERIFY_COST = 0.00005
 
@@ -49,27 +49,38 @@ export default function DocumentVerification() {
     return new ethers.JsonRpcProvider(rootstockRPCs[currentRPC])
   }
 
-  // Hàm lấy balance của user
+  // Hàm lấy balance của user - ĐÃ SỬA
   const fetchUserBalance = async () => {
     if (account) {
       try {
-        const provider = getProvider()
+        let provider
+        // Sử dụng window.ethereum để lấy balance chính xác
+        if (window.ethereum) {
+          provider = new ethers.BrowserProvider(window.ethereum)
+        } else {
+          provider = getProvider()
+        }
+        
         const balance = await provider.getBalance(account)
         const formattedBalance = ethers.formatEther(balance)
         const balanceNum = parseFloat(formattedBalance)
-        setUserBalance(balanceNum.toFixed(6))
+        
+        console.log('💰 Balance fetched:', balanceNum)
+        
+        setUserBalance(balanceNum.toString()) // Lưu dạng string để so sánh chính xác
         
         // Tính toán số giao dịch có thể thực hiện
         const canRegister = Math.floor(balanceNum / ESTIMATED_REGISTER_COST)
         const canVerify = Math.floor(balanceNum / ESTIMATED_VERIFY_COST)
         
         setTransactionStats({
-          canRegister,
-          canVerify,
+          canRegister: canRegister > 0 ? canRegister : 0,
+          canVerify: canVerify > 0 ? canVerify : 0,
           registerCost: ESTIMATED_REGISTER_COST,
           verifyCost: ESTIMATED_VERIFY_COST,
           hasSufficientBalance: balanceNum >= MINIMUM_BALANCE
         })
+
       } catch (error) {
         console.error('Lỗi lấy balance:', error)
         setUserBalance('0')
@@ -258,13 +269,21 @@ export default function DocumentVerification() {
   }
 
   const registerDocument = async () => {
+    console.log('🔍 DEBUG - Kiểm tra balance trước khi đăng ký:', {
+      userBalance,
+      parsedBalance: parseFloat(userBalance),
+      minimum: MINIMUM_BALANCE,
+      isSufficient: parseFloat(userBalance) >= MINIMUM_BALANCE
+    })
+
     if (!contract) {
       alert('⚠️ Vui lòng kết nối ví trước')
       return
     }
     
-    // Kiểm tra balance trước khi thực hiện
-    if (parseFloat(userBalance) < MINIMUM_BALANCE) {
+    // Kiểm tra balance trước khi thực hiện - ĐÃ SỬA ĐIỀU KIỆN
+    const currentBalance = parseFloat(userBalance)
+    if (currentBalance < MINIMUM_BALANCE) {
       alert(`❌ Không đủ tRBTC!\n\nBalance hiện tại: ${userBalance} tRBTC\nCần ít nhất: ${MINIMUM_BALANCE} tRBTC\n\nVui lòng nhận test token tại faucet.`)
       return
     }
@@ -393,6 +412,10 @@ export default function DocumentVerification() {
     }
   }
 
+  // Format balance để hiển thị
+  const displayBalance = userBalance === '0' ? '0' : parseFloat(userBalance).toFixed(6)
+  const hasSufficientBalance = parseFloat(userBalance) >= MINIMUM_BALANCE
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -450,8 +473,8 @@ export default function DocumentVerification() {
               <p>👤 Ví: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
               <div style={styles.balanceDisplay}>
                 <span style={styles.balanceLabel}>Balance:</span>
-                <span style={styles.balanceAmount}>{userBalance} tRBTC</span>
-                {parseFloat(userBalance) >= MINIMUM_BALANCE ? (
+                <span style={styles.balanceAmount}>{displayBalance} tRBTC</span>
+                {hasSufficientBalance ? (
                   <span style={styles.sufficientBalance}>✅ Đủ</span>
                 ) : (
                   <span style={styles.lowBalanceWarning}>⚠️ Thấp</span>
@@ -479,6 +502,7 @@ export default function DocumentVerification() {
                 <p><strong>💸 Chi phí ước tính:</strong></p>
                 <p>• Đăng ký document: ~0.0003 tRBTC</p>
                 <p>• Xác minh document: ~0.00005 tRBTC</p>
+                <p>• Tối thiểu: {MINIMUM_BALANCE} tRBTC</p>
               </div>
             </div>
             
@@ -537,16 +561,16 @@ export default function DocumentVerification() {
 
             <button 
               onClick={registerDocument}
-              disabled={loading || !documentHash || parseFloat(userBalance) < MINIMUM_BALANCE}
+              disabled={loading || !documentHash || !hasSufficientBalance}
               style={{
                 ...styles.primaryButton,
-                ...((loading || !documentHash || parseFloat(userBalance) < MINIMUM_BALANCE) && styles.disabledButton)
+                ...((loading || !documentHash || !hasSufficientBalance) && styles.disabledButton)
               }}
             >
               {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký Document'}
             </button>
 
-            {parseFloat(userBalance) < MINIMUM_BALANCE && (
+            {!hasSufficientBalance && (
               <p style={styles.insufficientFunds}>
                 ❌ Không đủ balance để thực hiện giao dịch (cần ít nhất {MINIMUM_BALANCE} tRBTC)
               </p>
@@ -610,7 +634,7 @@ export default function DocumentVerification() {
   )
 }
 
-// Styles
+// Styles (giữ nguyên từ code trước)
 const styles = {
   container: {
     minHeight: '100vh',
