@@ -10,174 +10,99 @@ export default function DocumentVerification() {
   const [loading, setLoading] = useState(false)
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
-  const [contractDeployed, setContractDeployed] = useState(false)
-  const [currentRPC, setCurrentRPC] = useState(0)
+  const [balance, setBalance] = useState('0')
+  // Cập nhật mức Gas Price khởi tạo lên 1.2 gwei để khắc phục lỗi trước đó
+  const [gasPrice, setGasPrice] = useState('1.2') 
 
-  // ✅ CONTRACT ADDRESS MỚI - ĐÃ DEPLOY THÀNH CÔNG
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
-  // Multiple RPC endpoints for fallback
-  const rootstockRPCs = [
-    'https://public-node.testnet.rsk.co',
-    'https://mycrypto.testnet.rsk.co',
-    'https://testnet.sovryn.app/rpc'
-  ]
-
-  // ABI contract - đơn giản hóa để tránh lỗi
   const contractABI = [
     "function registerDocument(string _documentHash, string _documentType) external",
     "function verifyDocument(string _documentHash) external view returns (bool)",
-    "function getUserDocuments(address _user) external view returns (string[])",
     "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
 
-  // Hàm lấy provider với retry
-  const getProvider = () => {
-    return new ethers.JsonRpcProvider(rootstockRPCs[currentRPC])
-  }
-
-  // Chuyển sang RPC khác khi gặp lỗi
-  const switchRPC = () => {
-    const newIndex = (currentRPC + 1) % rootstockRPCs.length
-    setCurrentRPC(newIndex)
-    console.log(`🔄 Chuyển sang RPC: ${rootstockRPCs[newIndex]}`)
-    return newIndex
-  }
-
-  // Kiểm tra contract deployment với retry
-  const checkContractDeployment = async () => {
-    let retries = 3
-    while (retries > 0) {
-      try {
-        const provider = getProvider()
-        const code = await provider.getCode(contractAddress)
-        const isDeployed = code !== '0x'
-        setContractDeployed(isDeployed)
-        console.log(`✅ Contract deployment check: ${isDeployed}`)
-        return isDeployed
-      } catch (error) {
-        console.error(`❌ Lỗi kiểm tra contract (${retries} retries left):`, error)
-        retries--
-        if (retries > 0) {
-          switchRPC()
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        }
-      }
+  // Cập nhật số dư khi tài khoản thay đổi
+  useEffect(() => {
+    if (account && typeof window.ethereum !== 'undefined') {
+      checkBalance(account)
     }
-    setContractDeployed(false)
-    return false
-  }
+  }, [account])
 
-  // Thêm network Rootstock vào MetaMask
-  const addRootstockNetwork = async () => {
+  // Kiểm tra số dư
+  const checkBalance = async (address) => {
     try {
-      await window.ethereum.request({
-        method: 'wallet_addEthereumChain',
-        params: [{
-          chainId: '0x1F',
-          chainName: 'Rootstock Testnet',
-          nativeCurrency: {
-            name: 'tRBTC',
-            symbol: 'tRBTC',
-decimals: 18
-          },
-          rpcUrls: [rootstockRPCs[0]],
-          blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
-        }]
-      })
-      return true
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const balance = await provider.getBalance(address)
+      const balanceInRBTC = ethers.formatUnits(balance, 18)
+      setBalance(parseFloat(balanceInRBTC).toFixed(6))
+      return parseFloat(balanceInRBTC)
     } catch (error) {
-      console.error('Error adding network:', error)
-      return false
+      return 0
     }
   }
 
-  // Chuyển sang network Rootstock
-  const switchToRootstock = async () => {
-    try {
-      await window.ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x1F' }]
-      })
-      return true
-    } catch (switchError) {
-      if (switchError.code === 4902) {
-        const added = await addRootstockNetwork()
-        return added
-      }
-      return false
-    }
-  }
-
+  // Kết nối và chuyển mạng
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
-        setStatus('🔄 Đang kết nối Rootstock...')
+        setStatus('🔄 Đang kết nối...')
 
-        // Kết nối ví trước
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         })
         setAccount(accounts[0])
         
-        // Kiểm tra network
         const provider = new ethers.BrowserProvider(window.ethereum)
-        const network = await provider.getNetwork()
+        let network = await provider.getNetwork()
         
-        if (network.chainId !== 31n) {
+        // Kiểm tra chainId (31)
+        if (network.chainId !== BigInt(31)) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
-          const switched = await switchToRootstock()
-          if (!switched) {
-            setStatus('❌ Lỗi chuyển network')
-            return
+          try {
+             await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0x1F' }], // Rootstock chainId
+             })
+             // Sau khi chuyển, lấy lại network
+             network = await provider.getNetwork()
+          } catch(switchError) {
+             // Nếu lỗi 4902 (Chưa thêm network), thêm nó vào
+             if (switchError.code === 4902) {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                      chainId: '0x1F',
+                      chainName: 'Rootstock Testnet',
+                      nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
+                      rpcUrls: ['https://public-node.testnet.rsk.co'],
+                      blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
+                    }]
+                })
+             } else {
+                throw switchError;
+             }
           }
-          // Đợi network chuyển đổi
-          await new Promise(resolve => setTimeout(resolve, 2000))
         }
 
-        // ✅ KIỂM TRA CONTRACT MỚI
-        setStatus('🔍 Đang kiểm tra contract...')
-        const isDeployed = await checkContractDeployment()
+        const currentBalance = await checkBalance(accounts[0])
         
-        if (!isDeployed) {
-          setStatus('❌ Contract không khả dụng')
-          alert('❌ Contract không tồn tại hoặc RPC lỗi. Vui lòng thử lại sau.')
-          return
-        }
-
-        // ✅ TẠO CONTRACT INSTANCE VỚI ĐỊA CHỈ MỚI
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
-        setStatus(`✅ Đã kết nối Rootstock Testnet - Contract sẵn sàng!`)
+        setStatus(`✅ Đã kết nối | Số dư: ${currentBalance} tRBTC`)
 
       } catch (error) {
         console.error('Connection error:', error)
-        handleConnectionError(error)
+        setStatus('❌ Lỗi kết nối: ' + error.message.substring(0, 50) + '...')
       }
     } else {
       alert('⚠️ Vui lòng cài đặt MetaMask!')
     }
   }
 
-  const handleConnectionError = (error) => {
-    if (error.code === 4001) {
-      setStatus('❌ Từ chối kết nối')
-      alert('❌ Bạn đã từ chối kết nối ví')
-    } else if (error.message.includes('network') || error.message.includes('chain')) {
-      setStatus('❌ Lỗi network')
-      alert('❌ Lỗi kết nối network. Vui lòng thử lại.')
-    } else if (error.message.includes('RPC') || error.message.includes('fetch')) {
-      setStatus('❌ Lỗi RPC')
-      alert('❌ Lỗi kết nối RPC. Đang thử RPC khác...')
-      switchRPC()
-} else {
-      setStatus('❌ Lỗi kết nối')
-      alert('❌ Lỗi: ' + error.message)
-    }
-  }
-
+  // Tính Hash SHA-256 của file
   const calculateFileHash = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -213,14 +138,18 @@ decimals: 18
     }
   }
 
+  // Đăng ký Document lên Blockchain
   const registerDocument = async () => {
-    if (!contract) {
-      alert('⚠️ Vui lòng kết nối ví trước')
+    if (!contract || !documentHash) {
+      alert('⚠️ Vui lòng kết nối ví và upload file trước')
       return
     }
+
+    const currentBalance = await checkBalance(account)
+    const minBalance = 0.00015
     
-    if (!documentHash) {
-      alert('⚠️ Vui lòng upload file trước')
+    if (currentBalance < minBalance) {
+      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần ít nhất: ${minBalance} tRBTC`)
       return
     }
 
@@ -228,45 +157,63 @@ decimals: 18
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
-      // ✅ GỌI CONTRACT MỚI
+      const balanceBefore = currentBalance
+      
+      const gasPriceWei = ethers.parseUnits(gasPrice, 'gwei')
+      const gasLimit = 100000 
+      
+      // SỬA LỖI BIGINT: Chuyển gasLimit (number) sang BigInt trước khi nhân
+      const estimatedCost = BigInt(gasLimit) * gasPriceWei
+      const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
+      
       const tx = await contract.registerDocument(documentHash, documentType, {
-        gasLimit: 500000,
-        gasPrice: ethers.parseUnits('1', 'gwei')
+        gasLimit: gasLimit,
+        gasPrice: gasPriceWei
       })
       
-      alert('⏳ Đang xác nhận transaction...\n💸 Phí gas: ~0.0005 tRBTC')
+      alert(`⏳ Đang xác nhận...\n💰 Số dư: ${balanceBefore} tRBTC\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC\n⚡ Gas: ${gasPrice} gwei`)
       
       const receipt = await tx.wait()
-      console.log('Transaction receipt:', receipt)
+      
+      // Tính phí thực tế
+      const actualCost = receipt.gasUsed * receipt.gasPrice 
+      const actualCostInRBTC = ethers.formatUnits(actualCost, 18)
+      
+      const balanceAfter = await checkBalance(account)
       
       setStatus('✅ Đăng ký thành công!')
-      alert(`🎉 THÀNH CÔNG! Giấy tờ đã được lưu trên Rootstock Blockchain\n\n📝 Transaction Hash: ${receipt.hash}\n🔍 Xem trên Explorer: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
+      alert(`🎉 THÀNH CÔNG!\n\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n💰 Số dư trước: ${balanceBefore} tRBTC\n💰 Số dư sau: ${balanceAfter} tRBTC\n📉 Giảm: ${(balanceBefore - balanceAfter).toFixed(6)} tRBTC\n\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
 
     } catch (error) {
       console.error('Lỗi transaction:', error)
       setStatus('❌ Lỗi transaction')
-      handleTransactionError(error)
+      
+      if (error.code === 'INSUFFICIENT_FUNDS') {
+        const currentBalance = await checkBalance(account)
+        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC`)
+      } else if (error.code === 'ACTION_REJECTED') {
+        alert('❌ Bạn đã từ chối transaction')
+      } else if (error.message.includes('gas') || error.message.includes('execution reverted')) {
+        // Tự động tăng gas price khi lỗi Gas hoặc Revert (thường là do Gas thấp trên Rootstock)
+        const currentGasPrice = parseFloat(gasPrice);
+        const suggestedGas = (currentGasPrice * 1.5).toFixed(1);
+        
+        // Giới hạn Gas Price tự động tăng để tránh lãng phí tRBTC
+        if (parseFloat(suggestedGas) > 5.0) { 
+             alert(`⚠️ Đã thử Gas cao (${currentGasPrice} gwei). Vui lòng thử lại sau.`)
+        } else {
+             alert(`❌ Lỗi gas! Tự động tăng gas price lên ${suggestedGas} gwei.`)
+             setGasPrice(suggestedGas)
+        }
+      } else {
+        alert('❌ Lỗi không xác định: ' + error.message)
+      }
     }
     setLoading(false)
   }
 
-  const handleTransactionError = (error) => {
-    if (error.code === 'ACTION_REJECTED') {
-      alert('❌ Bạn đã từ chối transaction')
-    } else if (error.code === 'INSUFFICIENT_FUNDS') {
-      alert('❌ Không đủ tRBTC! Vui lòng nhận test token tại:\nhttps://faucet.testnet.rsk.co')
-    } else if (error.reason) {
-      alert('❌ Lỗi contract: ' + error.reason)
-    } else if (error.message.includes('RPC') || error.message.includes('fetch')) {
-      alert('❌ Lỗi RPC. Đang thử kết nối lại...')
-      switchRPC()
-    } else if (error.message.includes('nonce')) {
-      alert('❌ Lỗi nonce. Vui lòng reset tài khoản MetaMask.')
-    } else {
-      alert('❌ Lỗi: ' + error.message)
-    }
-  }
-const verifyDocument = async () => {
+  // Xác minh Document (Miễn phí)
+  const verifyDocument = async () => {
     if (!documentHash) {
       alert('⚠️ Vui lòng nhập hash document')
       return
@@ -276,37 +223,19 @@ const verifyDocument = async () => {
       setLoading(true)
       setStatus('🔍 Đang xác minh...')
       
-      // ✅ XÁC MINH VỚI CONTRACT MỚI
-      let retries = 2
-      while (retries > 0) {
-        try {
-          const provider = getProvider()
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
-          
-          const isVerified = await contractInstance.verifyDocument(documentHash)
-          setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
-          setStatus('✅ Xác minh hoàn tất')
-          break
-        } catch (error) {
-          retries--
-          if (retries === 0) {
-            throw error
-          }
-          console.log(`Retrying verification... (${retries} left)`)
-          switchRPC()
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        }
-      }
+      // Sử dụng BrowserProvider mặc định cho việc đọc dữ liệu
+      const provider = new ethers.BrowserProvider(window.ethereum) 
+      const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
+      
+      const isVerified = await contractInstance.verifyDocument(documentHash)
+      setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
+      setStatus('✅ Xác minh hoàn tất')
       
     } catch (error) {
       console.error('Lỗi xác minh:', error)
-      if (error.message.includes('document does not exist')) {
-        setVerificationResult('❌ GIẤY TỜ KHÔNG TỒN TẠI')
-      } else {
-        alert('❌ Lỗi xác minh: ' + error.message)
-        setVerificationResult('❌ LỖI XÁC MINH')
-      }
+      setVerificationResult('❌ LỖI XÁC MINH')
       setStatus('❌ Lỗi xác minh')
+      alert('❌ Lỗi xác minh: ' + error.message)
     }
     setLoading(false)
   }
@@ -317,11 +246,6 @@ const verifyDocument = async () => {
     setVerificationResult('')
   }
 
-  const retryConnection = () => {
-    setStatus('🔄 Đang thử kết nối lại...')
-    connectWallet()
-  }
-
   const getTestRBTC = () => {
     window.open('https://faucet.testnet.rsk.co', '_blank')
   }
@@ -330,25 +254,26 @@ const verifyDocument = async () => {
     window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
   }
 
+  const gasPriceOptions = [
+    { value: '0.5', label: '0.5 gwei (Rẻ nhất)' },
+    { value: '0.8', label: '0.8 gwei (Tiết kiệm)' },
+    { value: '1.2', label: '1.2 gwei (Ổn định - Khuyến nghị)' },
+    { value: '2', label: '2 gwei (Trung bình)' },
+    { value: '3', label: '3 gwei (Cao)' }
+  ]
+
+  // --- UI START ---
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>🆔 XÁC THỰC GIẤY TỜ</h1>
-        <p style={styles.subtitle}>Rootstock Blockchain - Testnet</p>
-        <div style={styles.statusContainer}>
-          <p style={styles.status}>{status}</p>
-          {status.includes('Lỗi') && (
-            <button onClick={retryConnection} style={styles.retryButton}>
-              🔄 Thử lại
-            </button>
-          )}
-        </div>
+        <p style={styles.subtitle}>Rootstock Testnet | Phí phù hợp: ~0.0001 tRBTC</p>
+        <p style={styles.status}>{status}</p>
         
-        {/* ✅ HIỂN THỊ THÔNG TIN CONTRACT MỚI */}
         <div style={styles.contractInfo}>
           <p>📝 <strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
           <button onClick={viewOnExplorer} style={styles.explorerButton}>
-            🔍 Xem trên Explorer
+            🔍 Explorer
           </button>
         </div>
       </header>
@@ -356,43 +281,54 @@ const verifyDocument = async () => {
       {!account ? (
         <div style={styles.connectSection}>
           <button onClick={connectWallet} style={styles.connectButton}>
-            🔗 Kết nối Rootstock Testnet
+            🔗 Kết nối Ví
           </button>
-<p style={styles.note}>Tự động thêm Rootstock Testnet vào MetaMask</p>
           
           <div style={styles.info}>
-            <p>💡 <strong>Thông tin Contract:</strong></p>
-            <p>Address: <strong>{contractAddress}</strong></p>
-            <p>Network: <strong>Rootstock Testnet</strong></p>
-            <p>Chain ID: <strong>31 (0x1F)</strong></p>
-            <p>Status: <strong>✅ Đã deploy thành công</strong></p>
+            <p>💡 <strong>Thông tin Phí:</strong></p>
+            <p>• Đăng ký: <strong>~0.00012 tRBTC</strong> (với 1.2 gwei)</p>
+            <p>• Xác minh: <strong>MIỄN PHÍ</strong></p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>📦 Đăng ký document: ~0.0005 tRBTC</p>
-            <p>🔍 Xác minh document: Miễn phí</p>
-            <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
-              Nhận tRBTC miễn phí tại đây
-            </button></p>
+            <p>🆓 <strong>NHẬN THÊM TEST TOKEN:</strong></p>
+            <button onClick={getTestRBTC} style={styles.faucetButton}>
+              🚰 Nhận thêm tRBTC tại Rootstock Faucet
+            </button>
           </div>
         </div>
       ) : (
         <div style={styles.mainContent}>
           <div style={styles.accountInfo}>
             <p>👤 Ví: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
+            <p>💰 Số dư: <strong>{balance} tRBTC</strong></p>
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
-            <p>📝 Contract: {contractAddress.substring(0, 8)}...{contractAddress.substring(contractAddress.length - 6)}</p>
+            
+            {parseFloat(balance) < 0.001 && (
+              <div style={styles.warning}>
+                <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.00015)} lần đăng ký</p>
+                <button onClick={getTestRBTC} style={styles.smallButton}>
+                  🚰 Nhận thêm tRBTC
+                </button>
+              </div>
+            )}
           </div>
 
-          <div style={styles.gasInfo}>
-            <p>💰 Phí gas: ~0.0005 tRBTC | Xác minh miễn phí</p>
-            <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
-              Nhận tRBTC test token
-            </button></p>
-            <p>🔍 <button onClick={viewOnExplorer} style={styles.linkButton}>
-              Xem contract trên Explorer
-            </button></p>
+          <div style={styles.gasSettings}>
+            <label style={styles.label}>⚡ Gas Price (Phí tối ưu hóa):</label>
+            <select 
+              value={gasPrice}
+              onChange={(e) => setGasPrice(e.target.value)}
+              style={styles.select}
+            >
+              {gasPriceOptions.map(option => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p style={styles.noteText}>💡 Nếu giao dịch lỗi, hãy thử tăng Gas Price lên. Hiện tại đang ở mức **{gasPrice} gwei**.</p>
           </div>
 
           <div style={styles.section}>
@@ -410,7 +346,6 @@ const verifyDocument = async () => {
                 <option value="HO_KHAU">Sổ hộ khẩu</option>
                 <option value="BANG_CAP">Bằng cấp</option>
                 <option value="HOP_DONG">Hợp đồng</option>
-                <option value="KHAC">Khác</option>
               </select>
             </div>
 
@@ -428,26 +363,29 @@ const verifyDocument = async () => {
 
             {documentHash && (
               <div style={styles.hashDisplay}>
-                <p><strong>🔐 Hash document:</strong></p>
-<p style={styles.hashText}>{documentHash}</p>
-                <p style={styles.noteText}><small>Lưu hash này để xác minh sau</small></p>
+                <p><strong>🔐 Hash:</strong></p>
+                <p style={styles.hashText}>{documentHash}</p>
               </div>
             )}
 
             <button 
               onClick={registerDocument}
-              disabled={loading || !documentHash}
+              disabled={loading || !documentHash || parseFloat(balance) < 0.00015}
               style={{
                 ...styles.primaryButton,
-                ...((loading || !documentHash) && styles.disabledButton)
+                ...((loading || !documentHash || parseFloat(balance) < 0.00015) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký Document'}
+              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký Document (Phí ~${(0.1 * parseFloat(gasPrice)).toFixed(4)} tRBTC)`}
             </button>
+
+            {parseFloat(balance) < 0.00015 && (
+              <p style={styles.errorText}>❌ Cần ít nhất 0.00015 tRBTC</p>
+            )}
           </div>
 
           <div style={styles.section}>
-            <h2>🔍 XÁC MINH GIẤY TỜ</h2>
+            <h2>🔍 XÁC MINH GIẤY TỜ (MIỄN PHÍ)</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Hash document:</label>
@@ -486,8 +424,6 @@ const verifyDocument = async () => {
                 <p style={styles.resultText}>{verificationResult}</p>
                 <p><strong>Hash:</strong> {documentHash.substring(0, 20)}...{documentHash.substring(documentHash.length - 10)}</p>
                 <p><strong>Thời gian:</strong> {new Date().toLocaleString('vi-VN')}</p>
-                <p><strong>Network:</strong> Rootstock Testnet</p>
-                <p><strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
               </div>
             )}
           </div>
@@ -496,20 +432,19 @@ const verifyDocument = async () => {
 
       <footer style={styles.footer}>
         <p>© 2024 Hệ thống xác thực giấy tờ - Rootstock Testnet</p>
-        <p>Contract: {contractAddress}</p>
-        <p>✅ Contract đã được deploy và sẵn sàng sử dụng!</p>
+        <p>💰 Phí phù hợp: ~0.0001 tRBTC | 🆓 Xác minh: Miễn phí | Số dư: {balance} tRBTC</p>
       </footer>
     </div>
   )
 }
 
-// Styles (giữ nguyên từ code trước)
+// Styles (Phần này giữ nguyên)
 const styles = {
   container: {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     padding: '20px',
-fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
   },
   header: {
     textAlign: 'center',
@@ -526,16 +461,9 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     opacity: 0.9,
     margin: 0
   },
-  statusContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '10px',
-    marginTop: '10px'
-  },
   status: {
     fontSize: '1rem',
-    margin: 0,
+    margin: '10px 0 0 0',
     fontWeight: 'bold',
     background: 'rgba(255,255,255,0.2)',
     display: 'inline-block',
@@ -551,15 +479,6 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     alignItems: 'center',
     justifyContent: 'center',
     gap: '15px'
-  },
-  retryButton: {
-    padding: '8px 16px',
-    backgroundColor: '#ff6b6b',
-    color: 'white',
-    border: 'none',
-    borderRadius: '5px',
-    cursor: 'pointer',
-    fontSize: '0.9rem'
   },
   explorerButton: {
     padding: '8px 16px',
@@ -591,19 +510,13 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     width: '100%',
     fontWeight: 'bold'
   },
-  note: {
-    color: '#666',
-    fontSize: '0.9rem',
-    margin: '0 0 20px 0'
-  },
   info: {
     background: '#e3f2fd',
     border: '1px solid #2196f3',
     padding: '15px',
     borderRadius: '8px',
     margin: '15px 0',
-    textAlign: 'left',
-    fontSize: '0.9rem'
+    textAlign: 'left'
   },
   gasInfo: {
     background: '#e8f5e8',
@@ -613,13 +526,23 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     margin: '15px 0',
     textAlign: 'left'
   },
-  linkButton: {
-    background: 'none',
+  faucetButton: {
+    padding: '12px 20px',
+    backgroundColor: '#27ae60',
+    color: 'white',
     border: 'none',
-    color: '#2196f3',
-    textDecoration: 'underline',
+    borderRadius: '8px',
     cursor: 'pointer',
-    fontSize: '1rem'
+    width: '100%',
+    fontWeight: 'bold'
+  },
+  gasSettings: {
+    background: '#fff3cd',
+    border: '1px solid #ffeaa7',
+    padding: '15px',
+    borderRadius: '8px',
+    margin: '15px 0',
+    textAlign: 'left'
   },
   mainContent: {
     maxWidth: '800px',
@@ -632,6 +555,23 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
     marginBottom: '20px',
     boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
     textAlign: 'center'
+  },
+  warning: {
+    background: '#ffebee',
+    border: '1px solid #f44336',
+    padding: '10px',
+    borderRadius: '8px',
+    margin: '10px 0'
+  },
+  smallButton: {
+    padding: '8px 16px',
+    backgroundColor: '#f6851b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    marginTop: '5px'
   },
   section: {
     background: 'white',
@@ -652,7 +592,7 @@ fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
   select: {
     width: '100%',
     padding: '12px',
-border: '1px solid #ddd',
+    border: '1px solid #ddd',
     borderRadius: '8px',
     fontSize: '1rem',
     marginTop: '5px'
@@ -697,6 +637,12 @@ border: '1px solid #ddd',
     color: '#666',
     fontSize: '0.8rem',
     margin: '5px 0 0 0'
+  },
+  errorText: {
+    color: '#e74c3c',
+    textAlign: 'center',
+    margin: '10px 0 0 0',
+    fontWeight: 'bold'
   },
   primaryButton: {
     width: '100%',
@@ -770,5 +716,4 @@ border: '1px solid #ddd',
     opacity: 0.8,
     fontSize: '0.9rem'
   }
-
-    }
+}
