@@ -11,7 +11,7 @@ export default function DocumentVerification() {
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [balance, setBalance] = useState('0')
-  const [gasPrice, setGasPrice] = useState('0.5')
+  const [gasPrice, setGasPrice] = useState('0.8') // Bắt đầu ở mức 0.8 gwei để ổn định hơn
 
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
@@ -21,7 +21,7 @@ export default function DocumentVerification() {
     "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
 
-  // Cải tiến: Thêm useEffect để kiểm tra số dư khi tài khoản thay đổi
+  // Cập nhật số dư khi tài khoản thay đổi
   useEffect(() => {
     if (account && typeof window.ethereum !== 'undefined') {
       checkBalance(account)
@@ -41,6 +41,7 @@ export default function DocumentVerification() {
     }
   }
 
+  // Kết nối và chuyển mạng
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -54,7 +55,7 @@ export default function DocumentVerification() {
         const provider = new ethers.BrowserProvider(window.ethereum)
         let network = await provider.getNetwork()
         
-        // FIX: So sánh BigInt với BigInt. Dùng BigInt(31) là đúng, nhưng thêm logic chuyển mạng rõ ràng hơn.
+        // Kiểm tra chainId (31)
         if (network.chainId !== BigInt(31)) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           try {
@@ -70,7 +71,7 @@ export default function DocumentVerification() {
                 await window.ethereum.request({
                     method: 'wallet_addEthereumChain',
                     params: [{
-                      chainId: '0x1F', // Hex của 31
+                      chainId: '0x1F',
                       chainName: 'Rootstock Testnet',
                       nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
                       rpcUrls: ['https://public-node.testnet.rsk.co'],
@@ -78,12 +79,11 @@ export default function DocumentVerification() {
                     }]
                 })
              } else {
-                throw switchError; // Ném lỗi khác để xử lý bên ngoài
+                throw switchError;
              }
           }
         }
 
-        // Kiểm tra số dư
         const currentBalance = await checkBalance(accounts[0])
         
         const signer = await provider.getSigner()
@@ -94,13 +94,14 @@ export default function DocumentVerification() {
 
       } catch (error) {
         console.error('Connection error:', error)
-        setStatus('❌ Lỗi kết nối')
+        setStatus('❌ Lỗi kết nối: ' + error.message.substring(0, 50) + '...')
       }
     } else {
       alert('⚠️ Vui lòng cài đặt MetaMask!')
     }
   }
 
+  // Tính Hash SHA-256 của file
   const calculateFileHash = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -136,23 +137,18 @@ export default function DocumentVerification() {
     }
   }
 
+  // Đăng ký Document lên Blockchain
   const registerDocument = async () => {
-    if (!contract) {
-      alert('⚠️ Vui lòng kết nối ví trước')
-      return
-    }
-    
-    if (!documentHash) {
-      alert('⚠️ Vui lòng upload file trước')
+    if (!contract || !documentHash) {
+      alert('⚠️ Vui lòng kết nối ví và upload file trước')
       return
     }
 
-    // Kiểm tra số dư
     const currentBalance = await checkBalance(account)
     const minBalance = 0.00015
     
     if (currentBalance < minBalance) {
-      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\nBạn có thể thử ~${Math.floor(currentBalance / 0.00015)} lần đăng ký`)
+      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần ít nhất: ${minBalance} tRBTC`)
       return
     }
 
@@ -160,14 +156,10 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
-      // Hiển thị số dư trước khi trừ
-      const balanceBefore = await checkBalance(account)
+      const balanceBefore = currentBalance
       
-      // Sử dụng gas price từ state (0.5 gwei)
       const gasPriceWei = ethers.parseUnits(gasPrice, 'gwei')
-      
-      // Gas limit vừa phải
-      const gasLimit = 100000
+      const gasLimit = 100000 
       
       // SỬA LỖI BIGINT: Chuyển gasLimit (number) sang BigInt trước khi nhân
       const estimatedCost = BigInt(gasLimit) * gasPriceWei
@@ -182,11 +174,10 @@ export default function DocumentVerification() {
       
       const receipt = await tx.wait()
       
-      // receipt.gasUsed và receipt.gasPrice là BigInt nên phép nhân này đúng
+      // Tính phí thực tế
       const actualCost = receipt.gasUsed * receipt.gasPrice 
       const actualCostInRBTC = ethers.formatUnits(actualCost, 18)
       
-      // Cập nhật số dư sau khi trừ
       const balanceAfter = await checkBalance(account)
       
       setStatus('✅ Đăng ký thành công!')
@@ -198,25 +189,27 @@ export default function DocumentVerification() {
       
       if (error.code === 'INSUFFICIENT_FUNDS') {
         const currentBalance = await checkBalance(account)
-        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần thêm: ${(0.00015 - currentBalance).toFixed(6)} tRBTC\n\n🆓 Vui lòng nhận thêm test token!`)
+        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC`)
       } else if (error.code === 'ACTION_REJECTED') {
         alert('❌ Bạn đã từ chối transaction')
-      } else if (error.message.includes('gas')) {
-        // Tăng gas price ít hơn nếu lỗi
-        const suggestedGas = (parseFloat(gasPrice) * 1.5).toFixed(1)
-        alert(`❌ Lỗi gas! Tự động tăng gas price lên ${suggestedGas} gwei.`)
-        setGasPrice(suggestedGas)
-      } else if (error.message.includes('execution reverted')) {
-        alert('❌ Document đã được đăng ký trước đó hoặc lỗi thực thi hợp đồng khác!')
+      } else if (error.message.includes('gas') || error.message.includes('execution reverted')) {
+        // Tự động tăng gas price khi lỗi Gas hoặc Revert (thường là do Gas thấp trên Rootstock)
+        const currentGasPrice = parseFloat(gasPrice);
+        const suggestedGas = (currentGasPrice * 1.5).toFixed(1);
+        if (parseFloat(suggestedGas) > 5) { // Giới hạn tăng gas
+             alert(`⚠️ Đã thử Gas cao (${currentGasPrice} gwei). Vui lòng thử lại sau.`)
+        } else {
+             alert(`❌ Lỗi gas! Tự động tăng gas price lên ${suggestedGas} gwei.`)
+             setGasPrice(suggestedGas)
+        }
       } else {
-        alert('❌ Lỗi: ' + error.message)
+        alert('❌ Lỗi không xác định: ' + error.message)
       }
     }
     setLoading(false)
   }
 
-  // Hàm verifyDocument không cần chỉnh sửa BigInt vì nó không thực hiện phép toán số học phức tạp
-
+  // Xác minh Document (Miễn phí)
   const verifyDocument = async () => {
     if (!documentHash) {
       alert('⚠️ Vui lòng nhập hash document')
@@ -257,16 +250,15 @@ export default function DocumentVerification() {
     window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
   }
 
-  // Gas price options cho số dư 0.002 tRBTC
   const gasPriceOptions = [
-    { value: '0.3', label: '0.3 gwei (Rất rẻ - ~0.00003 tRBTC)' },
-    { value: '0.5', label: '0.5 gwei (Rẻ - ~0.00005 tRBTC)' },
-    { value: '1', label: '1 gwei (Trung bình - ~0.0001 tRBTC)' },
-    { value: '2', label: '2 gwei (Cao - ~0.0002 tRBTC)' },
-    { value: '3', label: '3 gwei (Rất cao - ~0.0003 tRBTC)' }
+    { value: '0.3', label: '0.3 gwei (Rất rẻ)' },
+    { value: '0.5', label: '0.5 gwei (Rẻ)' },
+    { value: '0.8', label: '0.8 gwei (Ổn định - Khuyến nghị)' },
+    { value: '1', label: '1 gwei (Trung bình)' },
+    { value: '2', label: '2 gwei (Cao)' }
   ]
 
-  // Phần còn lại của hàm return (UI) giữ nguyên
+  // --- UI START ---
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -289,10 +281,9 @@ export default function DocumentVerification() {
           </button>
           
           <div style={styles.info}>
-            <p>💡 <strong>Với số dư ~0.002 tRBTC:</strong></p>
-            <p>• Đăng ký: <strong>~0.0001-0.0002 tRBTC</strong></p>
+            <p>💡 <strong>Thông tin Phí:</strong></p>
+            <p>• Đăng ký: <strong>~0.00008 tRBTC</strong> (với 0.8 gwei)</p>
             <p>• Xác minh: <strong>MIỄN PHÍ</strong></p>
-            <p>• Có thể test: <strong>10-15 lần</strong></p>
           </div>
 
           <div style={styles.gasInfo}>
@@ -312,7 +303,7 @@ export default function DocumentVerification() {
             
             {parseFloat(balance) < 0.001 && (
               <div style={styles.warning}>
-                <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.00015)} lần đăng ký</p>
+                <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.0001)} lần đăng ký</p>
                 <button onClick={getTestRBTC} style={styles.smallButton}>
                   🚰 Nhận thêm tRBTC
                 </button>
@@ -321,7 +312,7 @@ export default function DocumentVerification() {
           </div>
 
           <div style={styles.gasSettings}>
-            <label style={styles.label}>⚡ Gas Price (Phí ~0.0001 tRBTC):</label>
+            <label style={styles.label}>⚡ Gas Price (Phí tối ưu hóa):</label>
             <select 
               value={gasPrice}
               onChange={(e) => setGasPrice(e.target.value)}
@@ -333,11 +324,11 @@ export default function DocumentVerification() {
                 </option>
               ))}
             </select>
-            <p style={styles.noteText}>💡 Chọn 0.5 gwei để tiết kiệm với số dư {balance} tRBTC</p>
+            <p style={styles.noteText}>💡 Nếu giao dịch lỗi, hãy thử tăng Gas Price lên.</p>
           </div>
 
           <div style={styles.section}>
-            <h2>📤 ĐĂNG KÝ GIẤY TỜ MỚI (Phí: ~0.0001 tRBTC)</h2>
+            <h2>📤 ĐĂNG KÝ GIẤY TỜ MỚI</h2>
             
             <div style={styles.formGroup}>
               <label style={styles.label}>Loại giấy tờ:</label>
@@ -381,7 +372,7 @@ export default function DocumentVerification() {
                 ...((loading || !documentHash || parseFloat(balance) < 0.00015) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký (Phí ~0.0001 tRBTC)`}
+              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký Document (Phí ~${(0.1 * parseFloat(gasPrice)).toFixed(4)} tRBTC)`}
             </button>
 
             {parseFloat(balance) < 0.00015 && (
@@ -443,7 +434,7 @@ export default function DocumentVerification() {
   )
 }
 
-// Styles với responsive
+// Styles (Phần này giữ nguyên)
 const styles = {
   container: {
     minHeight: '100vh',
