@@ -12,6 +12,7 @@ export default function DocumentVerification() {
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [contractDeployed, setContractDeployed] = useState(false)
   const [currentRPC, setCurrentRPC] = useState(0)
+  const [userBalance, setUserBalance] = useState('0')
 
   // ✅ CONTRACT ADDRESS MỚI - ĐÃ DEPLOY THÀNH CÔNG
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
@@ -34,6 +35,21 @@ export default function DocumentVerification() {
   // Hàm lấy provider với retry
   const getProvider = () => {
     return new ethers.JsonRpcProvider(rootstockRPCs[currentRPC])
+  }
+
+  // Hàm lấy balance của user
+  const fetchUserBalance = async () => {
+    if (account) {
+      try {
+        const provider = getProvider()
+        const balance = await provider.getBalance(account)
+        const formattedBalance = ethers.formatEther(balance)
+        setUserBalance(parseFloat(formattedBalance).toFixed(6))
+      } catch (error) {
+        console.error('Lỗi lấy balance:', error)
+        setUserBalance('0')
+      }
+    }
   }
 
   // Chuyển sang RPC khác khi gặp lỗi
@@ -150,6 +166,9 @@ export default function DocumentVerification() {
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
+        // Lấy balance của user
+        await fetchUserBalance()
+        
         setStatus(`✅ Đã kết nối Rootstock Testnet - Contract sẵn sàng!`)
 
       } catch (error) {
@@ -219,6 +238,12 @@ export default function DocumentVerification() {
       return
     }
     
+    // Kiểm tra balance trước khi thực hiện
+    if (parseFloat(userBalance) < 0.0005) {
+      alert(`❌ Không đủ tRBTC!\n\nBalance hiện tại: ${userBalance} tRBTC\nCần ít nhất: 0.0005 tRBTC\n\nVui lòng nhận test token tại faucet.`)
+      return
+    }
+    
     if (!documentHash) {
       alert('⚠️ Vui lòng upload file trước')
       return
@@ -238,6 +263,9 @@ export default function DocumentVerification() {
       
       const receipt = await tx.wait()
       console.log('Transaction receipt:', receipt)
+      
+      // Cập nhật balance sau giao dịch
+      await fetchUserBalance()
       
       setStatus('✅ Đăng ký thành công!')
       alert(`🎉 THÀNH CÔNG! Giấy tờ đã được lưu trên Rootstock Blockchain\n\n📝 Transaction Hash: ${receipt.hash}\n🔍 Xem trên Explorer: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
@@ -331,6 +359,15 @@ export default function DocumentVerification() {
     window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
   }
 
+  const copyContractAddress = async () => {
+    try {
+      await navigator.clipboard.writeText(contractAddress)
+      alert('✅ Đã copy contract address!')
+    } catch (error) {
+      console.error('Lỗi copy:', error)
+    }
+  }
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
@@ -349,7 +386,10 @@ export default function DocumentVerification() {
         <div style={styles.contractInfo}>
           <p>📝 <strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
           <button onClick={viewOnExplorer} style={styles.explorerButton}>
-            🔍 Xem trên Explorer
+            🔍 Explorer
+          </button>
+          <button onClick={copyContractAddress} style={styles.copyButton}>
+            📋 Copy
           </button>
         </div>
       </header>
@@ -379,11 +419,20 @@ export default function DocumentVerification() {
         </div>
       ) : (
         <div style={styles.mainContent}>
+          {/* ✅ HIỂN THỊ BALANCE CỦA USER */}
           <div style={styles.accountInfo}>
-            <p>👤 Ví: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
+            <div style={styles.balanceHeader}>
+              <p>👤 Ví: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
+              <div style={styles.balanceDisplay}>
+                <span style={styles.balanceLabel}>Balance:</span>
+                <span style={styles.balanceAmount}>{userBalance} tRBTC</span>
+                {parseFloat(userBalance) < 0.001 && (
+                  <span style={styles.lowBalanceWarning}>⚠️ Thấp</span>
+                )}
+              </div>
+            </div>
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
-            <p>📝 Contract: {contractAddress.substring(0, 8)}...{contractAddress.substring(contractAddress.length - 6)}</p>
           </div>
 
           <div style={styles.gasInfo}>
@@ -437,14 +486,20 @@ export default function DocumentVerification() {
 
             <button 
               onClick={registerDocument}
-              disabled={loading || !documentHash}
+              disabled={loading || !documentHash || parseFloat(userBalance) < 0.0005}
               style={{
                 ...styles.primaryButton,
-                ...((loading || !documentHash) && styles.disabledButton)
+                ...((loading || !documentHash || parseFloat(userBalance) < 0.0005) && styles.disabledButton)
               }}
             >
               {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký Document'}
             </button>
+
+            {parseFloat(userBalance) < 0.0005 && (
+              <p style={styles.insufficientFunds}>
+                ❌ Không đủ balance để thực hiện giao dịch
+              </p>
+            )}
           </div>
 
           <div style={styles.section}>
@@ -504,7 +559,7 @@ export default function DocumentVerification() {
   )
 }
 
-// Styles (giữ nguyên từ code trước)
+// Styles cập nhật
 const styles = {
   container: {
     minHeight: '100vh',
@@ -545,13 +600,14 @@ const styles = {
   },
   contractInfo: {
     background: 'rgba(255,255,255,0.1)',
-    padding: '10px',
+    padding: '10px 15px',
     borderRadius: '10px',
     marginTop: '15px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '15px'
+    gap: '10px',
+    flexWrap: 'wrap'
   },
   retryButton: {
     padding: '8px 16px',
@@ -563,13 +619,22 @@ const styles = {
     fontSize: '0.9rem'
   },
   explorerButton: {
-    padding: '8px 16px',
+    padding: '6px 12px',
     backgroundColor: '#3498db',
     color: 'white',
     border: 'none',
     borderRadius: '5px',
     cursor: 'pointer',
-    fontSize: '0.9rem'
+    fontSize: '0.8rem'
+  },
+  copyButton: {
+    padding: '6px 12px',
+    backgroundColor: '#27ae60',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '0.8rem'
   },
   connectSection: {
     textAlign: 'center',
@@ -631,8 +696,41 @@ const styles = {
     padding: '20px',
     borderRadius: '10px',
     marginBottom: '20px',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-    textAlign: 'center'
+    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+  },
+  balanceHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px',
+    flexWrap: 'wrap',
+    gap: '10px'
+  },
+  balanceDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    background: '#f8f9fa',
+    padding: '8px 15px',
+    borderRadius: '20px',
+    border: '1px solid #e9ecef'
+  },
+  balanceLabel: {
+    fontWeight: 'bold',
+    color: '#666'
+  },
+  balanceAmount: {
+    fontWeight: 'bold',
+    color: '#27ae60',
+    fontSize: '1.1rem'
+  },
+  lowBalanceWarning: {
+    background: '#ff6b6b',
+    color: 'white',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontSize: '0.7rem',
+    fontWeight: 'bold'
   },
   section: {
     background: 'white',
@@ -763,6 +861,12 @@ const styles = {
     backgroundColor: '#f8d7da',
     color: '#721c24',
     borderColor: '#f5c6cb'
+  },
+  insufficientFunds: {
+    color: '#e74c3c',
+    textAlign: 'center',
+    marginTop: '10px',
+    fontWeight: 'bold'
   },
   footer: {
     textAlign: 'center',
