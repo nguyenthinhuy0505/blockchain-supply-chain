@@ -11,7 +11,7 @@ export default function DocumentVerification() {
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [balance, setBalance] = useState('0')
-  const [gasPrice, setGasPrice] = useState('0.01') // GIẢM XUỐNG 0.01 gwei
+  const [gasPrice, setGasPrice] = useState('0.01')
 
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
@@ -72,6 +72,7 @@ export default function DocumentVerification() {
         setStatus(`✅ Đã kết nối | Số dư: ${balance} tRBTC`)
 
       } catch (error) {
+        console.error('Connection error:', error)
         setStatus('❌ Lỗi kết nối')
       }
     } else {
@@ -126,8 +127,10 @@ export default function DocumentVerification() {
 
     // Kiểm tra số dư
     const currentBalance = await checkBalance(account)
-    if (currentBalance < 0.00001) {
-      alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư: ${balance} tRBTC\n\nCần ít nhất 0.00001 tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
+    const minBalance = 0.00001
+    
+    if (currentBalance < minBalance) {
+      alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${balance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
       return
     }
 
@@ -135,6 +138,9 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
+      // Hiển thị số dư trước khi trừ
+      const balanceBefore = await checkBalance(account)
+      
       // GAS PRICE CỰC THẤP - 0.01 gwei
       const gasPriceWei = ethers.parseUnits(gasPrice, 'gwei')
       
@@ -150,25 +156,27 @@ export default function DocumentVerification() {
       const estimatedCost = gasLimit * gasPriceWei
       const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
       
-      alert(`⏳ Đang xác nhận...\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC`)
+      alert(`⏳ Đang xác nhận...\n💰 Số dư trước: ${balanceBefore} tRBTC\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC`)
       
       const receipt = await tx.wait()
       
+      // Tính phí thực tế
       const actualCost = receipt.gasUsed * receipt.gasPrice
       const actualCostInRBTC = ethers.formatUnits(actualCost, 18)
       
-      // Cập nhật số dư
-      await checkBalance(account)
+      // Cập nhật số dư sau khi trừ
+      const balanceAfter = await checkBalance(account)
       
       setStatus('✅ Đăng ký thành công!')
-      alert(`🎉 THÀNH CÔNG!\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n💰 Số dư còn: ${balance} tRBTC`)
+      alert(`🎉 THÀNH CÔNG!\n\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n💰 Số dư trước: ${balanceBefore} tRBTC\n💰 Số dư sau: ${balanceAfter} tRBTC\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
 
     } catch (error) {
       console.error('Lỗi transaction:', error)
       setStatus('❌ Lỗi transaction')
       
       if (error.code === 'INSUFFICIENT_FUNDS') {
-        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư: ${balance} tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
+        const currentBalance = await checkBalance(account)
+        alert(`❌ KHÔNG ĐỦ tRBTC!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần thêm: ${(0.00001 - currentBalance).toFixed(8)} tRBTC\n\n🆓 NHẬN TEST TOKEN:\nhttps://faucet.testnet.rsk.co`)
       } else if (error.code === 'ACTION_REJECTED') {
         alert('❌ Bạn đã từ chối transaction')
       } else if (error.message.includes('gas')) {
@@ -217,6 +225,10 @@ export default function DocumentVerification() {
 
   const getTestRBTC = () => {
     window.open('https://faucet.testnet.rsk.co', '_blank')
+  }
+
+  const viewOnExplorer = () => {
+    window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
   }
 
   // Gas price options cực thấp
