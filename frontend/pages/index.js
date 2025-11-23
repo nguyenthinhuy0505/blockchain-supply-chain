@@ -48,12 +48,12 @@ export default function DocumentVerification() {
         const network = await provider.getNetwork()
         
         // FIX: So sánh BigInt với BigInt
-        if (network.chainId !== 31n) {
+        if (network.chainId !== BigInt(31)) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
             params: [{
-              chainId: '0x1F',
+              chainId: '0x1F', // Hex của 31
               chainName: 'Rootstock Testnet',
               nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
               rpcUrls: ['https://public-node.testnet.rsk.co'],
@@ -70,7 +70,7 @@ export default function DocumentVerification() {
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
-        setStatus(`✅ Đã kết nối | Số dư: ${balance} tRBTC`)
+        setStatus(`✅ Đã kết nối | Số dư: ${currentBalance} tRBTC`)
 
       } catch (error) {
         console.error('Connection error:', error)
@@ -130,9 +130,8 @@ export default function DocumentVerification() {
     const currentBalance = await checkBalance(account)
     const minBalance = 0.00015
     
-    // FIX: Chuyển đổi sang number để so sánh
     if (currentBalance < minBalance) {
-      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${balance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\nBạn có thể thử ~${Math.floor(currentBalance / 0.00015)} lần đăng ký`)
+      alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${currentBalance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\nBạn có thể thử ~${Math.floor(currentBalance / 0.00015)} lần đăng ký`)
       return
     }
 
@@ -285,7 +284,6 @@ export default function DocumentVerification() {
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
             
-            {/* FIX: Chuyển đổi sang number để so sánh */}
             {parseFloat(balance) < 0.001 && (
               <div style={styles.warning}>
                 <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.00015)} lần đăng ký</p>
@@ -425,37 +423,22 @@ const styles = {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     padding: '20px',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
-    '@media (max-width: 768px)': {
-      padding: '10px'
-    }
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
   },
   header: {
     textAlign: 'center',
     color: 'white',
-    marginBottom: '40px',
-    '@media (max-width: 768px)': {
-      marginBottom: '20px'
-    }
+    marginBottom: '40px'
   },
   title: {
     fontSize: '2.5rem',
     margin: '0 0 10px 0',
-    textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-    '@media (max-width: 768px)': {
-      fontSize: '2rem'
-    },
-    '@media (max-width: 480px)': {
-      fontSize: '1.5rem'
-    }
+    textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
   },
   subtitle: {
     fontSize: '1.2rem',
     opacity: 0.9,
-    margin: 0,
-    '@media (max-width: 480px)': {
-      fontSize: '1rem'
-    }
+    margin: 0
   },
   status: {
     fontSize: '1rem',
@@ -474,11 +457,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '15px',
-    '@media (max-width: 480px)': {
-      flexDirection: 'column',
-      gap: '10px'
-    }
+    gap: '15px'
   },
   explorerButton: {
     padding: '8px 16px',
@@ -496,10 +475,7 @@ const styles = {
     borderRadius: '15px',
     boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
     maxWidth: '600px',
-    margin: '0 auto',
-    '@media (max-width: 480px)': {
-      padding: '20px'
-    }
+    margin: '0 auto'
   },
   connectButton: {
     padding: '15px 30px',
@@ -581,10 +557,7 @@ const styles = {
     padding: '30px',
     borderRadius: '15px',
     marginBottom: '20px',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
-    '@media (max-width: 480px)': {
-      padding: '20px'
-    }
+    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
   },
   formGroup: {
     marginBottom: '20px'
@@ -671,11 +644,7 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     flex: 1,
-    fontWeight: 'bold',
-    '@media (max-width: 480px)': {
-      padding: '12px 15px',
-      fontSize: '1rem'
-    }
+    fontWeight: 'bold'
   },
   clearButton: {
     padding: '15px 25px',
@@ -686,12 +655,7 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     marginLeft: '10px',
-    fontWeight: 'bold',
-    '@media (max-width: 480px)': {
-      padding: '12px 15px',
-      fontSize: '1rem',
-      marginLeft: '5px'
-    }
+    fontWeight: 'bold'
   },
   disabledButton: {
     opacity: 0.6,
@@ -700,11 +664,7 @@ const styles = {
   buttonGroup: {
     display: 'flex',
     gap: '10px',
-    marginTop: '15px',
-    '@media (max-width: 480px)': {
-      flexDirection: 'column',
-      gap: '8px'
-    }
+    marginTop: '15px'
   },
   result: {
     padding: '20px',
@@ -736,48 +696,3 @@ const styles = {
     fontSize: '0.9rem'
   }
 }
-
-// Thêm media queries cho responsive (cần dùng CSS-in-JS library hoặc styled-components)
-const responsiveStyles = `
-  @media (max-width: 768px) {
-    .container {
-      padding: 10px;
-    }
-    .header {
-      margin-bottom: 20px;
-    }
-    .title {
-      font-size: 2rem;
-    }
-  }
-  
-  @media (max-width: 480px) {
-    .title {
-      font-size: 1.5rem;
-    }
-    .subtitle {
-      font-size: 1rem;
-    }
-    .connectSection {
-      padding: 20px;
-    }
-    .section {
-      padding: 20px;
-    }
-    .buttonGroup {
-      flex-direction: column;
-      gap: 8px;
-    }
-    .secondaryButton, .clearButton {
-      padding: 12px 15px;
-      font-size: 1rem;
-    }
-    .clearButton {
-      margin-left: 5px;
-    }
-    .contractInfo {
-      flex-direction: column;
-      gap: 10px;
-    }
-  }
-`
