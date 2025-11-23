@@ -14,13 +14,13 @@ export default function DocumentVerification() {
   // Contract address đã deploy trên Rootstock
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
-  // ABI contract
+  // ABI contract - Đã cập nhật event DocumentRegistered để khớp với Solidity
   const contractABI = [
     "function registerDocument(string memory _documentHash, string memory _documentType) public",
     "function verifyDocument(string memory _documentHash) public view returns (bool)",
     "function getUserDocuments(address _user) public view returns (string[] memory)",
-    "function name() public view returns (string memory)",
-    "event DocumentRegistered(string indexed documentHash, address indexed owner)"
+    "function name() public view returns (string memory)", // Giữ lại, nếu contract không có thì ethers sẽ bỏ qua
+    "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
 
   // Thêm network Rootstock vào MetaMask
@@ -70,10 +70,17 @@ export default function DocumentVerification() {
       try {
         setStatus('🔄 Đang kết nối Rootstock...')
 
-        // Kiểm tra và chuyển sang Rootstock network
         const provider = new ethers.BrowserProvider(window.ethereum)
+        
+        // 1. Kết nối ví (yêu cầu MetaMask mở)
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        })
+        setAccount(accounts[0])
+        
         const network = await provider.getNetwork()
         
+        // 2. Kiểm tra và chuyển sang Rootstock network
         if (network.chainId !== 31n) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           const switched = await switchToRootstock()
@@ -83,26 +90,20 @@ export default function DocumentVerification() {
             return
           }
         }
-
-        // Kết nối ví
-        const accounts = await window.ethereum.request({ 
-          method: 'eth_requestAccounts' 
-        })
-        setAccount(accounts[0])
         
-        // Tạo contract instance
+        // 3. Tạo contract instance
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
         setStatus('✅ Đã kết nối Rootstock Testnet')
         
-        // Kiểm tra contract
+        // Kiểm tra contract name (tùy chọn)
         try {
           const contractName = await contractInstance.name()
           console.log('Contract name:', contractName)
         } catch (e) {
-          console.log('Contract connected')
+          console.log('Contract connected successfully (no "name" function found)')
         }
 
       } catch (error) {
@@ -126,7 +127,8 @@ export default function DocumentVerification() {
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target.result
-          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
+          // Sử dụng SHA-256 (phổ biến)
+          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer) 
           const hashArray = Array.from(new Uint8Array(hashBuffer))
           const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
           resolve(hashHex)
@@ -184,14 +186,16 @@ export default function DocumentVerification() {
       console.error('Lỗi:', error)
       setStatus('❌ Lỗi transaction')
       
-      if (error.reason) {
-        alert('❌ Lỗi contract: ' + error.reason)
+      // Xử lý lỗi Ethers v6 chi tiết hơn
+      if (error.code === 'ACTION_REJECTED') {
+        alert('❌ Bạn đã từ chối transaction')
       } else if (error.code === 'INSUFFICIENT_FUNDS') {
         alert('❌ Không đủ tRBTC! Vui lòng nhận test token tại:\nhttps://faucet.testnet.rsk.co')
-      } else if (error.message.includes('user rejected')) {
-        alert('❌ Bạn đã từ chối transaction')
+      } else if (error.reason) {
+        // Lỗi revert từ contract sẽ được hiển thị ở đây
+        alert('❌ Lỗi contract REVERT: ' + error.reason)
       } else {
-        alert('❌ Lỗi: ' + error.message)
+        alert('❌ Lỗi không xác định: ' + error.message)
       }
     }
     setLoading(false)
@@ -207,6 +211,7 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔍 Đang xác minh...')
       
+      // Sử dụng provider để gọi hàm view/pure (không cần signer/kết nối ví)
       const provider = new ethers.BrowserProvider(window.ethereum)
       const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
       
@@ -217,6 +222,7 @@ export default function DocumentVerification() {
     } catch (error) {
       console.error('Lỗi xác minh:', error)
       alert('❌ Lỗi xác minh: ' + error.message)
+      setVerificationResult('❌ LỖI XÁC MINH')
       setStatus('❌ Lỗi xác minh')
     }
     setLoading(false)
