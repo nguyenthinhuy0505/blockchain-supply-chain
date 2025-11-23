@@ -11,7 +11,7 @@ export default function DocumentVerification() {
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [balance, setBalance] = useState('0')
-  const [gasPrice, setGasPrice] = useState('0.5') // Giảm xuống 0.5 gwei để phí rẻ hơn
+  const [gasPrice, setGasPrice] = useState('0.5')
 
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
@@ -27,7 +27,7 @@ export default function DocumentVerification() {
       const provider = new ethers.BrowserProvider(window.ethereum)
       const balance = await provider.getBalance(address)
       const balanceInRBTC = ethers.formatUnits(balance, 18)
-      setBalance(parseFloat(balanceInRBTC).toFixed(6)) // Hiển thị 6 số thập phân
+      setBalance(parseFloat(balanceInRBTC).toFixed(6))
       return parseFloat(balanceInRBTC)
     } catch (error) {
       return 0
@@ -47,6 +47,7 @@ export default function DocumentVerification() {
         const provider = new ethers.BrowserProvider(window.ethereum)
         const network = await provider.getNetwork()
         
+        // FIX: So sánh BigInt với BigInt
         if (network.chainId !== 31n) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           await window.ethereum.request({
@@ -127,8 +128,9 @@ export default function DocumentVerification() {
 
     // Kiểm tra số dư
     const currentBalance = await checkBalance(account)
-    const minBalance = 0.00015 // Giảm xuống 0.00015 tRBTC
+    const minBalance = 0.00015
     
+    // FIX: Chuyển đổi sang number để so sánh
     if (currentBalance < minBalance) {
       alert(`❌ SỐ DƯ THẤP!\n\nSố dư hiện tại: ${balance} tRBTC\nCần ít nhất: ${minBalance} tRBTC\n\nBạn có thể thử ~${Math.floor(currentBalance / 0.00015)} lần đăng ký`)
       return
@@ -227,6 +229,10 @@ export default function DocumentVerification() {
     window.open('https://faucet.testnet.rsk.co', '_blank')
   }
 
+  const viewOnExplorer = () => {
+    window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
+  }
+
   // Gas price options cho số dư 0.002 tRBTC
   const gasPriceOptions = [
     { value: '0.3', label: '0.3 gwei (Rất rẻ - ~0.00003 tRBTC)' },
@@ -242,6 +248,13 @@ export default function DocumentVerification() {
         <h1 style={styles.title}>🆔 XÁC THỰC GIẤY TỜ</h1>
         <p style={styles.subtitle}>Rootstock Testnet | Phí phù hợp: ~0.0001 tRBTC</p>
         <p style={styles.status}>{status}</p>
+        
+        <div style={styles.contractInfo}>
+          <p>📝 <strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
+          <button onClick={viewOnExplorer} style={styles.explorerButton}>
+            🔍 Explorer
+          </button>
+        </div>
       </header>
 
       {!account ? (
@@ -272,6 +285,7 @@ export default function DocumentVerification() {
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
             
+            {/* FIX: Chuyển đổi sang number để so sánh */}
             {parseFloat(balance) < 0.001 && (
               <div style={styles.warning}>
                 <p>⚠️ Số dư: {balance} tRBTC - Đủ cho ~{Math.floor(parseFloat(balance) / 0.00015)} lần đăng ký</p>
@@ -405,28 +419,43 @@ export default function DocumentVerification() {
   )
 }
 
-// Styles (giữ nguyên)
+// Styles với responsive
 const styles = {
   container: {
     minHeight: '100vh',
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
     padding: '20px',
-    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    '@media (max-width: 768px)': {
+      padding: '10px'
+    }
   },
   header: {
     textAlign: 'center',
     color: 'white',
-    marginBottom: '40px'
+    marginBottom: '40px',
+    '@media (max-width: 768px)': {
+      marginBottom: '20px'
+    }
   },
   title: {
     fontSize: '2.5rem',
     margin: '0 0 10px 0',
-    textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
+    textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
+    '@media (max-width: 768px)': {
+      fontSize: '2rem'
+    },
+    '@media (max-width: 480px)': {
+      fontSize: '1.5rem'
+    }
   },
   subtitle: {
     fontSize: '1.2rem',
     opacity: 0.9,
-    margin: 0
+    margin: 0,
+    '@media (max-width: 480px)': {
+      fontSize: '1rem'
+    }
   },
   status: {
     fontSize: '1rem',
@@ -437,6 +466,29 @@ const styles = {
     padding: '5px 15px',
     borderRadius: '20px'
   },
+  contractInfo: {
+    background: 'rgba(255,255,255,0.1)',
+    padding: '10px',
+    borderRadius: '10px',
+    marginTop: '15px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '15px',
+    '@media (max-width: 480px)': {
+      flexDirection: 'column',
+      gap: '10px'
+    }
+  },
+  explorerButton: {
+    padding: '8px 16px',
+    backgroundColor: '#3498db',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
+  },
   connectSection: {
     textAlign: 'center',
     background: 'white',
@@ -444,7 +496,10 @@ const styles = {
     borderRadius: '15px',
     boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
     maxWidth: '600px',
-    margin: '0 auto'
+    margin: '0 auto',
+    '@media (max-width: 480px)': {
+      padding: '20px'
+    }
   },
   connectButton: {
     padding: '15px 30px',
@@ -526,7 +581,10 @@ const styles = {
     padding: '30px',
     borderRadius: '15px',
     marginBottom: '20px',
-    boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
+    boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
+    '@media (max-width: 480px)': {
+      padding: '20px'
+    }
   },
   formGroup: {
     marginBottom: '20px'
@@ -613,7 +671,11 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     flex: 1,
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    '@media (max-width: 480px)': {
+      padding: '12px 15px',
+      fontSize: '1rem'
+    }
   },
   clearButton: {
     padding: '15px 25px',
@@ -624,7 +686,12 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     marginLeft: '10px',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    '@media (max-width: 480px)': {
+      padding: '12px 15px',
+      fontSize: '1rem',
+      marginLeft: '5px'
+    }
   },
   disabledButton: {
     opacity: 0.6,
@@ -633,7 +700,11 @@ const styles = {
   buttonGroup: {
     display: 'flex',
     gap: '10px',
-    marginTop: '15px'
+    marginTop: '15px',
+    '@media (max-width: 480px)': {
+      flexDirection: 'column',
+      gap: '8px'
+    }
   },
   result: {
     padding: '20px',
@@ -665,3 +736,48 @@ const styles = {
     fontSize: '0.9rem'
   }
 }
+
+// Thêm media queries cho responsive (cần dùng CSS-in-JS library hoặc styled-components)
+const responsiveStyles = `
+  @media (max-width: 768px) {
+    .container {
+      padding: 10px;
+    }
+    .header {
+      margin-bottom: 20px;
+    }
+    .title {
+      font-size: 2rem;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .title {
+      font-size: 1.5rem;
+    }
+    .subtitle {
+      font-size: 1rem;
+    }
+    .connectSection {
+      padding: 20px;
+    }
+    .section {
+      padding: 20px;
+    }
+    .buttonGroup {
+      flex-direction: column;
+      gap: 8px;
+    }
+    .secondaryButton, .clearButton {
+      padding: 12px 15px;
+      font-size: 1rem;
+    }
+    .clearButton {
+      margin-left: 5px;
+    }
+    .contractInfo {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }
+`
