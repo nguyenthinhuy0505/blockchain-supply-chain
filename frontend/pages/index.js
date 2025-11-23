@@ -320,8 +320,8 @@ export default function DocumentVerification() {
 
   // Các mức gas price đề xuất
   const gasPriceOptions = [
-    { value: '5', label: '5 gwei (Thấp)' },
-    { value: '10', label: '10 gwei (Trung bình)' },
+    { value: '0.001', label: '0.001 gwei (Thấp)' },
+    { value: '0.002', label: '0.002 gwei (Trung bình)' },
     { value: '20', label: '20 gwei (Cao)' },
     { value: '50', label: '50 gwei (Rất cao)' }
   ]
