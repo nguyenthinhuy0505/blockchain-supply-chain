@@ -1,0 +1,39 @@
+{
+  "_format": "hh3-sol-build-info-1",
+  "id": "solc-0_8_28-46e483d9fbb54627b07e9fda2a388bde8941aae9",
+  "solcVersion": "0.8.28",
+  "solcLongVersion": "0.8.28+commit.7893614a",
+  "userSourceNameMap": {
+    "contracts/DocumentVerification.sol": "project/contracts/DocumentVerification.sol"
+  },
+  "input": {
+    "language": "Solidity",
+    "settings": {
+      "evmVersion": "cancun",
+      "optimizer": {
+        "enabled": true,
+        "runs": 200
+      },
+      "outputSelection": {
+        "*": {
+          "": [
+            "ast"
+          ],
+          "*": [
+            "abi",
+            "evm.bytecode",
+            "evm.deployedBytecode",
+            "evm.methodIdentifiers",
+            "metadata"
+          ]
+        }
+      },
+      "remappings": []
+    },
+    "sources": {
+      "project/contracts/DocumentVerification.sol": {
+        "content": "// SPDX-License-Identifier: MIT\r\npragma solidity ^0.8.28;\r\n\r\ncontract DocumentVerification {\r\n    struct Document {\r\n        string documentHash;\r\n        address owner;\r\n        uint256 timestamp;\r\n        string documentType;\r\n        bool verified;\r\n    }\r\n    \r\n    mapping(string => Document) public documents;\r\n    mapping(address => string[]) public userDocuments;\r\n    \r\n    event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp);\r\n    \r\n    function registerDocument(string memory _documentHash, string memory _documentType) public {\r\n        require(bytes(documents[_documentHash].documentHash).length == 0, \"Document already registered\");\r\n        \r\n        documents[_documentHash] = Document({\r\n            documentHash: _documentHash,\r\n            owner: msg.sender,\r\n            timestamp: block.timestamp,\r\n            documentType: _documentType,\r\n            verified: true\r\n        });\r\n        \r\n        userDocuments[msg.sender].push(_documentHash);\r\n        emit DocumentRegistered(_documentHash, msg.sender, block.timestamp);\r\n    }\r\n    \r\n    function verifyDocument(string memory _documentHash) public view returns (bool) {\r\n        return documents[_documentHash].verified && documents[_documentHash].owner != address(0);\r\n    }\r\n    \r\n    function getUserDocuments(address _user) public view returns (string[] memory) {\r\n        return userDocuments[_user];\r\n    }\r\n}"
+      }
+    }
+  }
+}

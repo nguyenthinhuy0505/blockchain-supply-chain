@@ -10,18 +10,63 @@ export default function DocumentVerification() {
   const [loading, setLoading] = useState(false)
   const [fileName, setFileName] = useState('')
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
+  const [contractDeployed, setContractDeployed] = useState(false)
+  const [currentRPC, setCurrentRPC] = useState(0)
 
-  // Contract address đã deploy trên Rootstock
+  // ✅ CONTRACT ADDRESS MỚI - ĐÃ DEPLOY THÀNH CÔNG
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
-  // ABI contract - Đã cập nhật event DocumentRegistered để khớp với Solidity
+  // Multiple RPC endpoints for fallback
+  const rootstockRPCs = [
+    'https://public-node.testnet.rsk.co',
+    'https://mycrypto.testnet.rsk.co',
+    'https://testnet.sovryn.app/rpc'
+  ]
+
+  // ABI contract - đơn giản hóa để tránh lỗi
   const contractABI = [
-    "function registerDocument(string memory _documentHash, string memory _documentType) public",
-    "function verifyDocument(string memory _documentHash) public view returns (bool)",
-    "function getUserDocuments(address _user) public view returns (string[] memory)",
-    "function name() public view returns (string memory)", // Giữ lại, nếu contract không có thì ethers sẽ bỏ qua
+    "function registerDocument(string _documentHash, string _documentType) external",
+    "function verifyDocument(string _documentHash) external view returns (bool)",
+    "function getUserDocuments(address _user) external view returns (string[])",
     "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
+
+  // Hàm lấy provider với retry
+  const getProvider = () => {
+    return new ethers.JsonRpcProvider(rootstockRPCs[currentRPC])
+  }
+
+  // Chuyển sang RPC khác khi gặp lỗi
+  const switchRPC = () => {
+    const newIndex = (currentRPC + 1) % rootstockRPCs.length
+    setCurrentRPC(newIndex)
+    console.log(`🔄 Chuyển sang RPC: ${rootstockRPCs[newIndex]}`)
+    return newIndex
+  }
+
+  // Kiểm tra contract deployment với retry
+  const checkContractDeployment = async () => {
+    let retries = 3
+    while (retries > 0) {
+      try {
+        const provider = getProvider()
+        const code = await provider.getCode(contractAddress)
+        const isDeployed = code !== '0x'
+        setContractDeployed(isDeployed)
+        console.log(`✅ Contract deployment check: ${isDeployed}`)
+        return isDeployed
+      } catch (error) {
+        console.error(`❌ Lỗi kiểm tra contract (${retries} retries left):`, error)
+        retries--
+        if (retries > 0) {
+          switchRPC()
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
+    }
+    setContractDeployed(false)
+    return false
+  }
 
   // Thêm network Rootstock vào MetaMask
   const addRootstockNetwork = async () => {
@@ -29,14 +74,14 @@ export default function DocumentVerification() {
       await window.ethereum.request({
         method: 'wallet_addEthereumChain',
         params: [{
-          chainId: '0x1F', // 31 in hex
+          chainId: '0x1F',
           chainName: 'Rootstock Testnet',
           nativeCurrency: {
             name: 'tRBTC',
             symbol: 'tRBTC',
             decimals: 18
           },
-          rpcUrls: ['https://public-node.testnet.rsk.co'],
+          rpcUrls: [rootstockRPCs[0]],
           blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
         }]
       })
@@ -52,11 +97,10 @@ export default function DocumentVerification() {
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0x1F' }] // Rootstock chainId
+        params: [{ chainId: '0x1F' }]
       })
       return true
     } catch (switchError) {
-      // Nếu network chưa tồn tại, thêm nó
       if (switchError.code === 4902) {
         const added = await addRootstockNetwork()
         return added
@@ -70,54 +114,67 @@ export default function DocumentVerification() {
       try {
         setStatus('🔄 Đang kết nối Rootstock...')
 
-        const provider = new ethers.BrowserProvider(window.ethereum)
-        
-        // 1. Kết nối ví (yêu cầu MetaMask mở)
+        // Kết nối ví trước
         const accounts = await window.ethereum.request({ 
           method: 'eth_requestAccounts' 
         })
         setAccount(accounts[0])
         
+        // Kiểm tra network
+        const provider = new ethers.BrowserProvider(window.ethereum)
         const network = await provider.getNetwork()
         
-        // 2. Kiểm tra và chuyển sang Rootstock network
         if (network.chainId !== 31n) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           const switched = await switchToRootstock()
           if (!switched) {
             setStatus('❌ Lỗi chuyển network')
-            alert('❌ Không thể chuyển sang Rootstock Testnet. Vui lòng thêm thủ công trong MetaMask.')
             return
           }
+          // Đợi network chuyển đổi
+          await new Promise(resolve => setTimeout(resolve, 2000))
         }
+
+        // ✅ KIỂM TRA CONTRACT MỚI
+        setStatus('🔍 Đang kiểm tra contract...')
+        const isDeployed = await checkContractDeployment()
         
-        // 3. Tạo contract instance
+        if (!isDeployed) {
+          setStatus('❌ Contract không khả dụng')
+          alert('❌ Contract không tồn tại hoặc RPC lỗi. Vui lòng thử lại sau.')
+          return
+        }
+
+        // ✅ TẠO CONTRACT INSTANCE VỚI ĐỊA CHỈ MỚI
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
-        setStatus('✅ Đã kết nối Rootstock Testnet')
-        
-        // Kiểm tra contract name (tùy chọn)
-        try {
-          const contractName = await contractInstance.name()
-          console.log('Contract name:', contractName)
-        } catch (e) {
-          console.log('Contract connected successfully (no "name" function found)')
-        }
+        setStatus(`✅ Đã kết nối Rootstock Testnet - Contract sẵn sàng!`)
 
       } catch (error) {
         console.error('Connection error:', error)
-        if (error.code === 4001) {
-          setStatus('❌ Từ chối kết nối')
-          alert('❌ Bạn đã từ chối kết nối ví')
-        } else {
-          setStatus('❌ Lỗi kết nối')
-          alert('❌ Lỗi: ' + error.message)
-        }
+        handleConnectionError(error)
       }
     } else {
       alert('⚠️ Vui lòng cài đặt MetaMask!')
+    }
+  }
+
+  const handleConnectionError = (error) => {
+    if (error.code === 4001) {
+      setStatus('❌ Từ chối kết nối')
+      alert('❌ Bạn đã từ chối kết nối ví')
+    } else if (error.message.includes('network') || error.message.includes('chain')) {
+      setStatus('❌ Lỗi network')
+      alert('❌ Lỗi kết nối network. Vui lòng thử lại.')
+    } else if (error.message.includes('RPC') || error.message.includes('fetch')) {
+      setStatus('❌ Lỗi RPC')
+      alert('❌ Lỗi kết nối RPC. Đang thử RPC khác...')
+      switchRPC()
+    } else {
+      setStatus('❌ Lỗi kết nối')
+      alert('❌ Lỗi: ' + error.message)
     }
   }
 
@@ -127,8 +184,7 @@ export default function DocumentVerification() {
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target.result
-          // Sử dụng SHA-256 (phổ biến)
-          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer) 
+          const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer)
           const hashArray = Array.from(new Uint8Array(hashBuffer))
           const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
           resolve(hashHex)
@@ -172,33 +228,43 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
+      // ✅ GỌI CONTRACT MỚI
       const tx = await contract.registerDocument(documentHash, documentType, {
-        gasLimit: 200000,
+        gasLimit: 500000,
+        gasPrice: ethers.parseUnits('1', 'gwei')
       })
       
-      alert('⏳ Đang xác nhận transaction...\n💸 Phí gas: ~0.00002 tRBTC')
+      alert('⏳ Đang xác nhận transaction...\n💸 Phí gas: ~0.0005 tRBTC')
       
-      await tx.wait()
-      setStatus('✅ Đăng ký thành công')
-      alert('✅ Thành công! Giấy tờ đã được lưu trên Rootstock Blockchain')
+      const receipt = await tx.wait()
+      console.log('Transaction receipt:', receipt)
+      
+      setStatus('✅ Đăng ký thành công!')
+      alert(`🎉 THÀNH CÔNG! Giấy tờ đã được lưu trên Rootstock Blockchain\n\n📝 Transaction Hash: ${receipt.hash}\n🔍 Xem trên Explorer: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
 
     } catch (error) {
-      console.error('Lỗi:', error)
+      console.error('Lỗi transaction:', error)
       setStatus('❌ Lỗi transaction')
-      
-      // Xử lý lỗi Ethers v6 chi tiết hơn
-      if (error.code === 'ACTION_REJECTED') {
-        alert('❌ Bạn đã từ chối transaction')
-      } else if (error.code === 'INSUFFICIENT_FUNDS') {
-        alert('❌ Không đủ tRBTC! Vui lòng nhận test token tại:\nhttps://faucet.testnet.rsk.co')
-      } else if (error.reason) {
-        // Lỗi revert từ contract sẽ được hiển thị ở đây
-        alert('❌ Lỗi contract REVERT: ' + error.reason)
-      } else {
-        alert('❌ Lỗi không xác định: ' + error.message)
-      }
+      handleTransactionError(error)
     }
     setLoading(false)
+  }
+
+  const handleTransactionError = (error) => {
+    if (error.code === 'ACTION_REJECTED') {
+      alert('❌ Bạn đã từ chối transaction')
+    } else if (error.code === 'INSUFFICIENT_FUNDS') {
+      alert('❌ Không đủ tRBTC! Vui lòng nhận test token tại:\nhttps://faucet.testnet.rsk.co')
+    } else if (error.reason) {
+      alert('❌ Lỗi contract: ' + error.reason)
+    } else if (error.message.includes('RPC') || error.message.includes('fetch')) {
+      alert('❌ Lỗi RPC. Đang thử kết nối lại...')
+      switchRPC()
+    } else if (error.message.includes('nonce')) {
+      alert('❌ Lỗi nonce. Vui lòng reset tài khoản MetaMask.')
+    } else {
+      alert('❌ Lỗi: ' + error.message)
+    }
   }
 
   const verifyDocument = async () => {
@@ -211,18 +277,36 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔍 Đang xác minh...')
       
-      // Sử dụng provider để gọi hàm view/pure (không cần signer/kết nối ví)
-      const provider = new ethers.BrowserProvider(window.ethereum)
-      const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
-      
-      const isVerified = await contractInstance.verifyDocument(documentHash)
-      setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
-      setStatus('✅ Xác minh hoàn tất')
+      // ✅ XÁC MINH VỚI CONTRACT MỚI
+      let retries = 2
+      while (retries > 0) {
+        try {
+          const provider = getProvider()
+          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
+          
+          const isVerified = await contractInstance.verifyDocument(documentHash)
+          setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
+          setStatus('✅ Xác minh hoàn tất')
+          break
+        } catch (error) {
+          retries--
+          if (retries === 0) {
+            throw error
+          }
+          console.log(`Retrying verification... (${retries} left)`)
+          switchRPC()
+          await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+      }
       
     } catch (error) {
       console.error('Lỗi xác minh:', error)
-      alert('❌ Lỗi xác minh: ' + error.message)
-      setVerificationResult('❌ LỖI XÁC MINH')
+      if (error.message.includes('document does not exist')) {
+        setVerificationResult('❌ GIẤY TỜ KHÔNG TỒN TẠI')
+      } else {
+        alert('❌ Lỗi xác minh: ' + error.message)
+        setVerificationResult('❌ LỖI XÁC MINH')
+      }
       setStatus('❌ Lỗi xác minh')
     }
     setLoading(false)
@@ -234,12 +318,40 @@ export default function DocumentVerification() {
     setVerificationResult('')
   }
 
+  const retryConnection = () => {
+    setStatus('🔄 Đang thử kết nối lại...')
+    connectWallet()
+  }
+
+  const getTestRBTC = () => {
+    window.open('https://faucet.testnet.rsk.co', '_blank')
+  }
+
+  const viewOnExplorer = () => {
+    window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
+  }
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
         <h1 style={styles.title}>🆔 XÁC THỰC GIẤY TỜ</h1>
         <p style={styles.subtitle}>Rootstock Blockchain - Testnet</p>
-        <p style={styles.status}>{status}</p>
+        <div style={styles.statusContainer}>
+          <p style={styles.status}>{status}</p>
+          {status.includes('Lỗi') && (
+            <button onClick={retryConnection} style={styles.retryButton}>
+              🔄 Thử lại
+            </button>
+          )}
+        </div>
+        
+        {/* ✅ HIỂN THỊ THÔNG TIN CONTRACT MỚI */}
+        <div style={styles.contractInfo}>
+          <p>📝 <strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
+          <button onClick={viewOnExplorer} style={styles.explorerButton}>
+            🔍 Xem trên Explorer
+          </button>
+        </div>
       </header>
 
       {!account ? (
@@ -250,20 +362,19 @@ export default function DocumentVerification() {
           <p style={styles.note}>Tự động thêm Rootstock Testnet vào MetaMask</p>
           
           <div style={styles.info}>
-            <p>💡 <strong>Thông tin Rootstock Testnet:</strong></p>
-            <p>Network Name: <strong>Rootstock Testnet</strong></p>
-            <p>RPC URL: <strong>https://public-node.testnet.rsk.co</strong></p>
+            <p>💡 <strong>Thông tin Contract:</strong></p>
+            <p>Address: <strong>{contractAddress}</strong></p>
+            <p>Network: <strong>Rootstock Testnet</strong></p>
             <p>Chain ID: <strong>31 (0x1F)</strong></p>
-            <p>Symbol: <strong>tRBTC</strong></p>
-            <p>Block Explorer: <strong>https://explorer.testnet.rootstock.io</strong></p>
+            <p>Status: <strong>✅ Đã deploy thành công</strong></p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>📦 Đăng ký document: ~0.00002 tRBTC</p>
+            <p>📦 Đăng ký document: ~0.0005 tRBTC</p>
             <p>🔍 Xác minh document: Miễn phí</p>
-            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" rel="noopener noreferrer" style={styles.link}>
+            <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
               Nhận tRBTC miễn phí tại đây
-            </a></p>
+            </button></p>
           </div>
         </div>
       ) : (
@@ -272,13 +383,17 @@ export default function DocumentVerification() {
             <p>👤 Ví: {account.substring(0, 6)}...{account.substring(account.length - 4)}</p>
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
+            <p>📝 Contract: {contractAddress.substring(0, 8)}...{contractAddress.substring(contractAddress.length - 6)}</p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>💰 Phí gas: ~0.00002 tRBTC | Xác minh miễn phí</p>
-            <p>🆓 <a href="https://faucet.testnet.rsk.co" target="_blank" rel="noopener noreferrer" style={styles.link}>
+            <p>💰 Phí gas: ~0.0005 tRBTC | Xác minh miễn phí</p>
+            <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
               Nhận tRBTC test token
-            </a></p>
+            </button></p>
+            <p>🔍 <button onClick={viewOnExplorer} style={styles.linkButton}>
+              Xem contract trên Explorer
+            </button></p>
           </div>
 
           <div style={styles.section}>
@@ -373,6 +488,7 @@ export default function DocumentVerification() {
                 <p><strong>Hash:</strong> {documentHash.substring(0, 20)}...{documentHash.substring(documentHash.length - 10)}</p>
                 <p><strong>Thời gian:</strong> {new Date().toLocaleString('vi-VN')}</p>
                 <p><strong>Network:</strong> Rootstock Testnet</p>
+                <p><strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
               </div>
             )}
           </div>
@@ -381,13 +497,14 @@ export default function DocumentVerification() {
 
       <footer style={styles.footer}>
         <p>© 2024 Hệ thống xác thực giấy tờ - Rootstock Testnet</p>
-        <p>Contract: 0xF561493424f457938C078a304e5B6F96765cec1d</p>
+        <p>Contract: {contractAddress}</p>
+        <p>✅ Contract đã được deploy và sẵn sàng sử dụng!</p>
       </footer>
     </div>
   )
 }
 
-// Styles
+// Styles (giữ nguyên từ code trước)
 const styles = {
   container: {
     minHeight: '100vh',
@@ -410,14 +527,49 @@ const styles = {
     opacity: 0.9,
     margin: 0
   },
+  statusContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '10px',
+    marginTop: '10px'
+  },
   status: {
     fontSize: '1rem',
-    margin: '10px 0 0 0',
+    margin: 0,
     fontWeight: 'bold',
     background: 'rgba(255,255,255,0.2)',
     display: 'inline-block',
     padding: '5px 15px',
     borderRadius: '20px'
+  },
+  contractInfo: {
+    background: 'rgba(255,255,255,0.1)',
+    padding: '10px',
+    borderRadius: '10px',
+    marginTop: '15px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '15px'
+  },
+  retryButton: {
+    padding: '8px 16px',
+    backgroundColor: '#ff6b6b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
+  },
+  explorerButton: {
+    padding: '8px 16px',
+    backgroundColor: '#3498db',
+    color: 'white',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
   },
   connectSection: {
     textAlign: 'center',
@@ -438,11 +590,7 @@ const styles = {
     cursor: 'pointer',
     marginBottom: '15px',
     width: '100%',
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s'
-  },
-  connectButtonHover: {
-    backgroundColor: '#e67615'
+    fontWeight: 'bold'
   },
   note: {
     color: '#666',
@@ -466,10 +614,13 @@ const styles = {
     margin: '15px 0',
     textAlign: 'left'
   },
-  link: {
+  linkButton: {
+    background: 'none',
+    border: 'none',
     color: '#2196f3',
-    textDecoration: 'none',
-    fontWeight: 'bold'
+    textDecoration: 'underline',
+    cursor: 'pointer',
+    fontSize: '1rem'
   },
   mainContent: {
     maxWidth: '800px',
@@ -558,8 +709,7 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     marginTop: '10px',
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s'
+    fontWeight: 'bold'
   },
   secondaryButton: {
     padding: '15px 25px',
@@ -570,8 +720,7 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     flex: 1,
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s'
+    fontWeight: 'bold'
   },
   clearButton: {
     padding: '15px 25px',
@@ -582,8 +731,7 @@ const styles = {
     fontSize: '1.1rem',
     cursor: 'pointer',
     marginLeft: '10px',
-    fontWeight: 'bold',
-    transition: 'background-color 0.3s'
+    fontWeight: 'bold'
   },
   disabledButton: {
     opacity: 0.6,

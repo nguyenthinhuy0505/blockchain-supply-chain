@@ -39,14 +39,21 @@ export default defineConfig({
       chainId: 2730,
       accounts: ["2598e686abf8883bc75d45d5ee85f65d5f17477f6358aaa942533d17ea7537fa"],
     },
-    // THÊM COINEX TESTNET
-    coinexTestnet: {
-  type: "http",
-  url: "https://testnet-rpc1.coinex.net",
-  chainId: 53,
-  accounts: ["2598e686abf8883bc75d45d5ee85f65d5f17477f6358aaa942533d17ea7537fa"],
-  gasPrice: 2000000000000, // Tăng lên 2000 gwei
-  gas: 5000000, // Thêm gas limit
-},
+    // BASE MAINNET - DÙNG PUBLICNODE
+    base: {
+      type: "http",
+      url: "https://base-rpc.publicnode.com",
+      chainId: 8453,
+      accounts: ["2598e686abf8883bc75d45d5ee85f65d5f17477f6358aaa942533d17ea7537fa"],
+      gasPrice: 1000000000, // 1 gwei
+    },
+    // BASE SEPOLIA TESTNET
+    baseSepolia: {
+      type: "http",
+      url: "https://sepolia.base.org",
+      chainId: 84532,
+      accounts: ["2598e686abf8883bc75d45d5ee85f65d5f17477f6358aaa942533d17ea7537fa"],
+      gasPrice: 1000000000,
+    },
   },
 });
