@@ -21,6 +21,13 @@ export default function DocumentVerification() {
     "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
 
+  // Cải tiến: Thêm useEffect để kiểm tra số dư khi tài khoản thay đổi
+  useEffect(() => {
+    if (account && typeof window.ethereum !== 'undefined') {
+      checkBalance(account)
+    }
+  }, [account])
+
   // Kiểm tra số dư
   const checkBalance = async (address) => {
     try {
@@ -45,22 +52,35 @@ export default function DocumentVerification() {
         setAccount(accounts[0])
         
         const provider = new ethers.BrowserProvider(window.ethereum)
-        const network = await provider.getNetwork()
+        let network = await provider.getNetwork()
         
-        // FIX: So sánh BigInt với BigInt
+        // FIX: So sánh BigInt với BigInt. Dùng BigInt(31) là đúng, nhưng thêm logic chuyển mạng rõ ràng hơn.
         if (network.chainId !== BigInt(31)) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: '0x1F', // Hex của 31
-              chainName: 'Rootstock Testnet',
-              nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
-              rpcUrls: ['https://public-node.testnet.rsk.co'],
-              blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
-            }]
-          })
-          await new Promise(resolve => setTimeout(resolve, 2000))
+          try {
+             await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0x1F' }], // Rootstock chainId
+             })
+             // Sau khi chuyển, lấy lại network
+             network = await provider.getNetwork()
+          } catch(switchError) {
+             // Nếu lỗi 4902 (Chưa thêm network), thêm nó vào
+             if (switchError.code === 4902) {
+                await window.ethereum.request({
+                    method: 'wallet_addEthereumChain',
+                    params: [{
+                      chainId: '0x1F', // Hex của 31
+                      chainName: 'Rootstock Testnet',
+                      nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
+                      rpcUrls: ['https://public-node.testnet.rsk.co'],
+                      blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
+                    }]
+                })
+             } else {
+                throw switchError; // Ném lỗi khác để xử lý bên ngoài
+             }
+          }
         }
 
         // Kiểm tra số dư
@@ -108,6 +128,7 @@ export default function DocumentVerification() {
         const hash = await calculateFileHash(file)
         setDocumentHash(hash)
         setFileName(file.name)
+        alert(`📄 Đã tạo hash: ${file.name}\n\n🔐 ${hash}`)
       } catch (error) {
         alert('❌ Lỗi file: ' + error.message)
       }
@@ -148,21 +169,21 @@ export default function DocumentVerification() {
       // Gas limit vừa phải
       const gasLimit = 100000
       
+      // SỬA LỖI BIGINT: Chuyển gasLimit (number) sang BigInt trước khi nhân
+      const estimatedCost = BigInt(gasLimit) * gasPriceWei
+      const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
+      
       const tx = await contract.registerDocument(documentHash, documentType, {
         gasLimit: gasLimit,
         gasPrice: gasPriceWei
       })
       
-      // Tính phí ước tính
-      const estimatedCost = gasLimit * gasPriceWei
-      const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
-      
       alert(`⏳ Đang xác nhận...\n💰 Số dư: ${balanceBefore} tRBTC\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC\n⚡ Gas: ${gasPrice} gwei`)
       
       const receipt = await tx.wait()
       
-      // Tính phí thực tế
-      const actualCost = receipt.gasUsed * receipt.gasPrice
+      // receipt.gasUsed và receipt.gasPrice là BigInt nên phép nhân này đúng
+      const actualCost = receipt.gasUsed * receipt.gasPrice 
       const actualCostInRBTC = ethers.formatUnits(actualCost, 18)
       
       // Cập nhật số dư sau khi trừ
@@ -186,13 +207,15 @@ export default function DocumentVerification() {
         alert(`❌ Lỗi gas! Tự động tăng gas price lên ${suggestedGas} gwei.`)
         setGasPrice(suggestedGas)
       } else if (error.message.includes('execution reverted')) {
-        alert('❌ Document đã được đăng ký trước đó!')
+        alert('❌ Document đã được đăng ký trước đó hoặc lỗi thực thi hợp đồng khác!')
       } else {
         alert('❌ Lỗi: ' + error.message)
       }
     }
     setLoading(false)
   }
+
+  // Hàm verifyDocument không cần chỉnh sửa BigInt vì nó không thực hiện phép toán số học phức tạp
 
   const verifyDocument = async () => {
     if (!documentHash) {
@@ -212,8 +235,10 @@ export default function DocumentVerification() {
       setStatus('✅ Xác minh hoàn tất')
       
     } catch (error) {
+      console.error('Lỗi xác minh:', error)
       setVerificationResult('❌ LỖI XÁC MINH')
       setStatus('❌ Lỗi xác minh')
+      alert('❌ Lỗi xác minh: ' + error.message)
     }
     setLoading(false)
   }
@@ -241,6 +266,7 @@ export default function DocumentVerification() {
     { value: '3', label: '3 gwei (Rất cao - ~0.0003 tRBTC)' }
   ]
 
+  // Phần còn lại của hàm return (UI) giữ nguyên
   return (
     <div style={styles.container}>
       <header style={styles.header}>
