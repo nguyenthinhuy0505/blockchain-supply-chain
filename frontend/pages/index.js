@@ -12,7 +12,7 @@ export default function DocumentVerification() {
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [contractDeployed, setContractDeployed] = useState(false)
   const [currentRPC, setCurrentRPC] = useState(0)
-  const [gasPrice, setGasPrice] = useState('10') // Default gas price
+  const [gasPrice, setGasPrice] = useState('0.1') // Giảm gas price xuống thấp
 
   // Contract address đã deploy
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
@@ -41,7 +41,6 @@ export default function DocumentVerification() {
   const switchRPC = () => {
     const newIndex = (currentRPC + 1) % rootstockRPCs.length
     setCurrentRPC(newIndex)
-    console.log(`🔄 Chuyển sang RPC: ${rootstockRPCs[newIndex]}`)
     return newIndex
   }
 
@@ -86,7 +85,6 @@ export default function DocumentVerification() {
       })
       return true
     } catch (error) {
-      console.error('Error adding network:', error)
       return false
     }
   }
@@ -139,7 +137,6 @@ export default function DocumentVerification() {
         
         if (!isDeployed) {
           setStatus('❌ Contract không khả dụng')
-          alert('❌ Contract không tồn tại hoặc RPC lỗi.')
           return
         }
 
@@ -148,19 +145,12 @@ export default function DocumentVerification() {
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
         
-        setStatus(`✅ Đã kết nối - Contract sẵn sàng!`)
+        setStatus(`✅ Đã kết nối - Sẵn sàng!`)
 
       } catch (error) {
         console.error('Connection error:', error)
         if (error.code === 4001) {
           setStatus('❌ Từ chối kết nối')
-          alert('❌ Bạn đã từ chối kết nối ví')
-        } else if (error.message.includes('network') || error.message.includes('chain')) {
-          setStatus('❌ Lỗi network')
-          alert('❌ Lỗi kết nối network.')
-        } else if (error.message.includes('RPC') || error.message.includes('fetch')) {
-          setStatus('❌ Lỗi RPC')
-          switchRPC()
         } else {
           setStatus('❌ Lỗi kết nối')
         }
@@ -219,15 +209,21 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
-      // Sử dụng gas price từ state
+      // Sử dụng gas price thấp
       const gasPriceWei = ethers.parseUnits(gasPrice, 'gwei')
       
+      // Estimate gas trước để tính phí chính xác
+      const estimatedGas = await contract.registerDocument.estimateGas(documentHash, documentType)
+      const estimatedCost = estimatedGas * gasPriceWei
+      const estimatedCostInRBTC = ethers.formatUnits(estimatedCost, 18)
+      
+      // Hiển thị phí ước tính
+      alert(`⏳ Đang xác nhận...\n💸 Phí ước tính: ${estimatedCostInRBTC} tRBTC\n⚡ Gas price: ${gasPrice} gwei`)
+      
       const tx = await contract.registerDocument(documentHash, documentType, {
-        gasLimit: 500000,
+        gasLimit: estimatedGas,
         gasPrice: gasPriceWei
       })
-      
-      alert(`⏳ Đang xác nhận...\n💸 Gas price: ${gasPrice} gwei`)
       
       const receipt = await tx.wait()
       
@@ -235,7 +231,7 @@ export default function DocumentVerification() {
       const actualCostInRBTC = ethers.formatUnits(actualCost, 18)
       
       setStatus('✅ Đăng ký thành công!')
-      alert(`🎉 THÀNH CÔNG!\n💸 Phí gas: ${actualCostInRBTC} tRBTC\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
+      alert(`🎉 THÀNH CÔNG!\n💸 Phí thực tế: ${actualCostInRBTC} tRBTC\n🔍 Xem: https://explorer.testnet.rootstock.io/tx/${receipt.hash}`)
 
     } catch (error) {
       console.error('Lỗi transaction:', error)
@@ -245,10 +241,13 @@ export default function DocumentVerification() {
         alert('❌ Bạn đã từ chối transaction')
       } else if (error.code === 'INSUFFICIENT_FUNDS') {
         alert('❌ Không đủ tRBTC!\n\n🆓 Nhận test token tại:\nhttps://faucet.testnet.rsk.co')
-      } else if (error.reason) {
-        alert('❌ Lỗi contract: ' + error.reason)
-      } else if (error.message.includes('gas')) {
-        alert(`❌ Lỗi gas price! Thử tăng gas price lên 20-50 gwei.`)
+      } else if (error.reason && error.reason.includes('gas')) {
+        // Nếu lỗi gas, đề xuất tăng gas price
+        const suggestedGas = (parseFloat(gasPrice) * 2).toFixed(1)
+        alert(`❌ Lỗi gas! Thử tăng gas price lên ${suggestedGas} gwei.`)
+        setGasPrice(suggestedGas)
+      } else if (error.message.includes('execution reverted')) {
+        alert('❌ Document đã được đăng ký trước đó!')
       } else {
         alert('❌ Lỗi: ' + error.message)
       }
@@ -266,32 +265,18 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔍 Đang xác minh...')
       
-      let retries = 2
-      while (retries > 0) {
-        try {
-          const provider = getProvider()
-          const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
-          
-          const isVerified = await contractInstance.verifyDocument(documentHash)
-          setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
-          setStatus('✅ Xác minh hoàn tất')
-          break
-        } catch (error) {
-          retries--
-          if (retries === 0) {
-            throw error
-          }
-          switchRPC()
-          await new Promise(resolve => setTimeout(resolve, 1000))
-        }
-      }
+      const provider = getProvider()
+      const contractInstance = new ethers.Contract(contractAddress, contractABI, provider)
+      
+      const isVerified = await contractInstance.verifyDocument(documentHash)
+      setVerificationResult(isVerified ? '✅ GIẤY TỜ HỢP LỆ' : '❌ GIẤY TỜ KHÔNG HỢP LỆ')
+      setStatus('✅ Xác minh hoàn tất')
       
     } catch (error) {
       console.error('Lỗi xác minh:', error)
       if (error.message.includes('document does not exist')) {
         setVerificationResult('❌ GIẤY TỜ KHÔNG TỒN TẠI')
       } else {
-        alert('❌ Lỗi xác minh: ' + error.message)
         setVerificationResult('❌ LỖI XÁC MINH')
       }
       setStatus('❌ Lỗi xác minh')
@@ -318,12 +303,13 @@ export default function DocumentVerification() {
     window.open(`https://explorer.testnet.rootstock.io/address/${contractAddress}`, '_blank')
   }
 
-  // Các mức gas price đề xuất
+  // Các mức gas price thấp
   const gasPriceOptions = [
-    { value: '0.001', label: '0.001 gwei (Thấp)' },
-    { value: '0.002', label: '0.002 gwei (Trung bình)' },
-    { value: '20', label: '20 gwei (Cao)' },
-    { value: '50', label: '50 gwei (Rất cao)' }
+    { value: '0.1', label: '0.1 gwei (Rất thấp)' },
+    { value: '0.5', label: '0.5 gwei (Thấp)' },
+    { value: '1', label: '1 gwei (Trung bình)' },
+    { value: '2', label: '2 gwei (Cao)' },
+    { value: '5', label: '5 gwei (Rất cao)' }
   ]
 
   return (
@@ -356,18 +342,17 @@ export default function DocumentVerification() {
           <p style={styles.note}>Tự động thêm Rootstock Testnet vào MetaMask</p>
           
           <div style={styles.info}>
-            <p>💡 <strong>Thông tin Contract:</strong></p>
-            <p>Address: <strong>{contractAddress}</strong></p>
+            <p>💡 <strong>Thông tin:</strong></p>
             <p>Network: <strong>Rootstock Testnet</strong></p>
             <p>Chain ID: <strong>31 (0x1F)</strong></p>
-            <p>Status: <strong>✅ Đã deploy thành công</strong></p>
+            <p>Phí gas: <strong>~0.00000001 tRBTC</strong></p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>📦 Đăng ký document: ~0.0001-0.001 tRBTC</p>
-            <p>🔍 Xác minh document: Miễn phí</p>
+            <p>📦 Đăng ký: ~0.00000001 tRBTC</p>
+            <p>🔍 Xác minh: Miễn phí</p>
             <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
-              Nhận tRBTC miễn phí tại đây
+              Nhận tRBTC testnet
             </button></p>
           </div>
         </div>
@@ -380,7 +365,7 @@ export default function DocumentVerification() {
           </div>
 
           <div style={styles.gasSettings}>
-            <label style={styles.label}>⚡ Gas Price (gwei):</label>
+            <label style={styles.label}>⚡ Gas Price:</label>
             <select 
               value={gasPrice}
               onChange={(e) => setGasPrice(e.target.value)}
@@ -392,15 +377,7 @@ export default function DocumentVerification() {
                 </option>
               ))}
             </select>
-            <p style={styles.noteText}>💡 Nếu lỗi "out of gas", thử tăng gas price</p>
-          </div>
-
-          <div style={styles.gasInfo}>
-            <p>💰 Phí gas ước tính: ~0.0001-0.001 tRBTC</p>
-            <p>🔍 Xác minh: Miễn phí</p>
-            <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
-              Nhận tRBTC test token
-            </button></p>
+            <p style={styles.noteText}>💡 Bắt đầu với 0.1 gwei, nếu lỗi thì tăng dần</p>
           </div>
 
           <div style={styles.section}>
@@ -436,7 +413,7 @@ export default function DocumentVerification() {
 
             {documentHash && (
               <div style={styles.hashDisplay}>
-                <p><strong>🔐 Hash document:</strong></p>
+                <p><strong>🔐 Hash:</strong></p>
                 <p style={styles.hashText}>{documentHash}</p>
               </div>
             )}
@@ -449,7 +426,7 @@ export default function DocumentVerification() {
                 ...((loading || !documentHash) && styles.disabledButton)
               }}
             >
-              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký (Gas: ${gasPrice} gwei)`}
+              {loading ? '⏳ Đang xử lý...' : `✅ Đăng ký (${gasPrice} gwei)`}
             </button>
           </div>
 
@@ -501,13 +478,13 @@ export default function DocumentVerification() {
 
       <footer style={styles.footer}>
         <p>© 2024 Hệ thống xác thực giấy tờ - Rootstock Testnet</p>
-        <p>Contract: {contractAddress}</p>
+        <p>Phí gas: ~0.00000001 tRBTC | Contract: {contractAddress.substring(0, 10)}...</p>
       </footer>
     </div>
   )
 }
 
-// Styles
+// Styles (giữ nguyên)
 const styles = {
   container: {
     minHeight: '100vh',
