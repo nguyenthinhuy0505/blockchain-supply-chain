@@ -13,8 +13,20 @@ export default function DocumentVerification() {
   const [contractDeployed, setContractDeployed] = useState(false)
   const [currentRPC, setCurrentRPC] = useState(0)
   const [userBalance, setUserBalance] = useState('0')
+  const [transactionStats, setTransactionStats] = useState({
+    canRegister: 0,
+    canVerify: 0,
+    registerCost: 0.0003,
+    verifyCost: 0.00005,
+    hasSufficientBalance: false
+  })
 
-  // ✅ CONTRACT ADDRESS MỚI - ĐÃ DEPLOY THÀNH CÔNG
+  // ✅ CONSTANTS
+  const MINIMUM_BALANCE = 0.0001
+  const ESTIMATED_REGISTER_COST = 0.0003
+  const ESTIMATED_VERIFY_COST = 0.00005
+
+  // ✅ CONTRACT ADDRESS
   const contractAddress = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
   // Multiple RPC endpoints for fallback
@@ -24,7 +36,7 @@ export default function DocumentVerification() {
     'https://testnet.sovryn.app/rpc'
   ]
 
-  // ABI contract - đơn giản hóa để tránh lỗi
+  // ABI contract
   const contractABI = [
     "function registerDocument(string _documentHash, string _documentType) external",
     "function verifyDocument(string _documentHash) external view returns (bool)",
@@ -44,7 +56,20 @@ export default function DocumentVerification() {
         const provider = getProvider()
         const balance = await provider.getBalance(account)
         const formattedBalance = ethers.formatEther(balance)
-        setUserBalance(parseFloat(formattedBalance).toFixed(6))
+        const balanceNum = parseFloat(formattedBalance)
+        setUserBalance(balanceNum.toFixed(6))
+        
+        // Tính toán số giao dịch có thể thực hiện
+        const canRegister = Math.floor(balanceNum / ESTIMATED_REGISTER_COST)
+        const canVerify = Math.floor(balanceNum / ESTIMATED_VERIFY_COST)
+        
+        setTransactionStats({
+          canRegister,
+          canVerify,
+          registerCost: ESTIMATED_REGISTER_COST,
+          verifyCost: ESTIMATED_VERIFY_COST,
+          hasSufficientBalance: balanceNum >= MINIMUM_BALANCE
+        })
       } catch (error) {
         console.error('Lỗi lấy balance:', error)
         setUserBalance('0')
@@ -151,7 +176,7 @@ export default function DocumentVerification() {
           await new Promise(resolve => setTimeout(resolve, 2000))
         }
 
-        // ✅ KIỂM TRA CONTRACT MỚI
+        // ✅ KIỂM TRA CONTRACT
         setStatus('🔍 Đang kiểm tra contract...')
         const isDeployed = await checkContractDeployment()
         
@@ -161,7 +186,7 @@ export default function DocumentVerification() {
           return
         }
 
-        // ✅ TẠO CONTRACT INSTANCE VỚI ĐỊA CHỈ MỚI
+        // ✅ TẠO CONTRACT INSTANCE
         const signer = await provider.getSigner()
         const contractInstance = new ethers.Contract(contractAddress, contractABI, signer)
         setContract(contractInstance)
@@ -239,8 +264,8 @@ export default function DocumentVerification() {
     }
     
     // Kiểm tra balance trước khi thực hiện
-    if (parseFloat(userBalance) < 0.0005) {
-      alert(`❌ Không đủ tRBTC!\n\nBalance hiện tại: ${userBalance} tRBTC\nCần ít nhất: 0.0005 tRBTC\n\nVui lòng nhận test token tại faucet.`)
+    if (parseFloat(userBalance) < MINIMUM_BALANCE) {
+      alert(`❌ Không đủ tRBTC!\n\nBalance hiện tại: ${userBalance} tRBTC\nCần ít nhất: ${MINIMUM_BALANCE} tRBTC\n\nVui lòng nhận test token tại faucet.`)
       return
     }
     
@@ -253,13 +278,13 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔄 Đang gửi transaction...')
 
-      // ✅ GỌI CONTRACT MỚI
+      // ✅ GỌI CONTRACT
       const tx = await contract.registerDocument(documentHash, documentType, {
         gasLimit: 500000,
         gasPrice: ethers.parseUnits('1', 'gwei')
       })
       
-      alert('⏳ Đang xác nhận transaction...\n💸 Phí gas: ~0.0005 tRBTC')
+      alert('⏳ Đang xác nhận transaction...\n💸 Phí gas: ~0.0003 tRBTC')
       
       const receipt = await tx.wait()
       console.log('Transaction receipt:', receipt)
@@ -305,7 +330,7 @@ export default function DocumentVerification() {
       setLoading(true)
       setStatus('🔍 Đang xác minh...')
       
-      // ✅ XÁC MINH VỚI CONTRACT MỚI
+      // ✅ XÁC MINH VỚI CONTRACT
       let retries = 2
       while (retries > 0) {
         try {
@@ -382,7 +407,7 @@ export default function DocumentVerification() {
           )}
         </div>
         
-        {/* ✅ HIỂN THỊ THÔNG TIN CONTRACT MỚI */}
+        {/* ✅ HIỂN THỊ THÔNG TIN CONTRACT */}
         <div style={styles.contractInfo}>
           <p>📝 <strong>Contract:</strong> {contractAddress.substring(0, 10)}...{contractAddress.substring(contractAddress.length - 8)}</p>
           <button onClick={viewOnExplorer} style={styles.explorerButton}>
@@ -410,8 +435,8 @@ export default function DocumentVerification() {
           </div>
 
           <div style={styles.gasInfo}>
-            <p>📦 Đăng ký document: ~0.0005 tRBTC</p>
-            <p>🔍 Xác minh document: Miễn phí</p>
+            <p>📦 Đăng ký document: ~0.0003 tRBTC</p>
+            <p>🔍 Xác minh document: ~0.00005 tRBTC</p>
             <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
               Nhận tRBTC miễn phí tại đây
             </button></p>
@@ -426,17 +451,43 @@ export default function DocumentVerification() {
               <div style={styles.balanceDisplay}>
                 <span style={styles.balanceLabel}>Balance:</span>
                 <span style={styles.balanceAmount}>{userBalance} tRBTC</span>
-                {parseFloat(userBalance) < 0.001 && (
+                {parseFloat(userBalance) >= MINIMUM_BALANCE ? (
+                  <span style={styles.sufficientBalance}>✅ Đủ</span>
+                ) : (
                   <span style={styles.lowBalanceWarning}>⚠️ Thấp</span>
                 )}
               </div>
             </div>
+            
+            {/* THÔNG TIN CHI TIẾT BALANCE */}
+            <div style={styles.balanceDetails}>
+              <div style={styles.transactionStats}>
+                <p><strong>📊 Có thể thực hiện:</strong></p>
+                <div style={styles.statsGrid}>
+                  <div style={styles.statItem}>
+                    <span>📝 Đăng ký:</span>
+                    <span style={styles.statValue}>{transactionStats.canRegister} documents</span>
+                  </div>
+                  <div style={styles.statItem}>
+                    <span>🔍 Xác minh:</span>
+                    <span style={styles.statValue}>{transactionStats.canVerify} lần</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={styles.costBreakdown}>
+                <p><strong>💸 Chi phí ước tính:</strong></p>
+                <p>• Đăng ký document: ~0.0003 tRBTC</p>
+                <p>• Xác minh document: ~0.00005 tRBTC</p>
+              </div>
+            </div>
+            
             <p>🌐 Network: Rootstock Testnet</p>
             <p>📊 {status}</p>
           </div>
 
           <div style={styles.gasInfo}>
-            <p>💰 Phí gas: ~0.0005 tRBTC | Xác minh miễn phí</p>
+            <p>💰 Phí gas ước tính: Đăng ký ~0.0003 tRBTC | Xác minh ~0.00005 tRBTC</p>
             <p>🆓 <button onClick={getTestRBTC} style={styles.linkButton}>
               Nhận tRBTC test token
             </button></p>
@@ -486,18 +537,18 @@ export default function DocumentVerification() {
 
             <button 
               onClick={registerDocument}
-              disabled={loading || !documentHash || parseFloat(userBalance) < 0.0005}
+              disabled={loading || !documentHash || parseFloat(userBalance) < MINIMUM_BALANCE}
               style={{
                 ...styles.primaryButton,
-                ...((loading || !documentHash || parseFloat(userBalance) < 0.0005) && styles.disabledButton)
+                ...((loading || !documentHash || parseFloat(userBalance) < MINIMUM_BALANCE) && styles.disabledButton)
               }}
             >
               {loading ? '⏳ Đang xử lý...' : '✅ Đăng ký Document'}
             </button>
 
-            {parseFloat(userBalance) < 0.0005 && (
+            {parseFloat(userBalance) < MINIMUM_BALANCE && (
               <p style={styles.insufficientFunds}>
-                ❌ Không đủ balance để thực hiện giao dịch
+                ❌ Không đủ balance để thực hiện giao dịch (cần ít nhất {MINIMUM_BALANCE} tRBTC)
               </p>
             )}
           </div>
@@ -559,7 +610,7 @@ export default function DocumentVerification() {
   )
 }
 
-// Styles cập nhật
+// Styles
 const styles = {
   container: {
     minHeight: '100vh',
@@ -724,6 +775,14 @@ const styles = {
     color: '#27ae60',
     fontSize: '1.1rem'
   },
+  sufficientBalance: {
+    background: '#27ae60',
+    color: 'white',
+    padding: '2px 8px',
+    borderRadius: '10px',
+    fontSize: '0.7rem',
+    fontWeight: 'bold'
+  },
   lowBalanceWarning: {
     background: '#ff6b6b',
     color: 'white',
@@ -731,6 +790,39 @@ const styles = {
     borderRadius: '10px',
     fontSize: '0.7rem',
     fontWeight: 'bold'
+  },
+  balanceDetails: {
+    background: '#f8f9fa',
+    padding: '15px',
+    borderRadius: '8px',
+    margin: '15px 0',
+    border: '1px solid #e9ecef'
+  },
+  transactionStats: {
+    marginBottom: '15px'
+  },
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '10px',
+    marginTop: '10px'
+  },
+  statItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px',
+    background: 'white',
+    borderRadius: '6px',
+    border: '1px solid #ddd'
+  },
+  statValue: {
+    fontWeight: 'bold',
+    color: '#27ae60'
+  },
+  costBreakdown: {
+    fontSize: '0.9rem',
+    color: '#666'
   },
   section: {
     background: 'white',
