@@ -12,7 +12,10 @@ export default function DocumentVerification() {
   const [status, setStatus] = useState('🔗 Kết nối Rootstock Testnet')
   const [userBalance, setUserBalance] = useState(0)
   const [hasSufficientBalance, setHasSufficientBalance] = useState(false)
-  const [activeTab, setActiveTab] = useState('register') // 'register' or 'verify'
+  const [activeTab, setActiveTab] = useState('register')
+  const [transactionHistory, setTransactionHistory] = useState([])
+  const [showTransactionModal, setShowTransactionModal] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState(null)
 
   // ✅ CONSTANTS
   const MINIMUM_BALANCE = 0.00005
@@ -24,7 +27,64 @@ export default function DocumentVerification() {
     "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
   ]
 
-  // ✅ HÀM LẤY BALANCE ĐƠN GIẢN
+  // ✅ HÀM LẤY LỊCH SỬ GIAO DỊCH
+  const getTransactionHistory = async (address) => {
+    if (!window.ethereum) return []
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      
+      // Lấy block number hiện tại
+      const currentBlock = await provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 10000) // 10,000 blocks gần nhất
+
+      // Tạo filter để lấy events từ contract
+      const contractInstance = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider)
+      
+      // Lấy các sự kiện DocumentRegistered
+      const events = await contractInstance.queryFilter(
+        'DocumentRegistered',
+        fromBlock,
+        'latest'
+      )
+
+      // Lọc các event từ địa chỉ hiện tại
+      const userEvents = events.filter(event => 
+        event.args && 
+        event.args.owner && 
+        event.args.owner.toLowerCase() === address.toLowerCase()
+      )
+
+      // Chuyển đổi events thành transaction history
+      const history = await Promise.all(
+        userEvents.map(async (event) => {
+          const tx = await provider.getTransaction(event.transactionHash)
+          const receipt = await provider.getTransactionReceipt(event.transactionHash)
+          const block = await provider.getBlock(receipt.blockNumber)
+
+          return {
+            hash: event.transactionHash,
+            type: 'register',
+            documentHash: event.args.documentHash,
+            documentType: 'CMND', // Cần thêm documentType vào event
+            timestamp: block.timestamp * 1000, // Chuyển sang milliseconds
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed.toString(),
+            gasPrice: tx.gasPrice ? ethers.formatUnits(tx.gasPrice, 'gwei') : '0',
+            status: receipt.status === 1 ? 'success' : 'failed'
+          }
+        })
+      )
+
+      return history.sort((a, b) => b.timestamp - a.timestamp) // Sắp xếp mới nhất trước
+
+    } catch (error) {
+      console.error('Lỗi lấy lịch sử giao dịch:', error)
+      return []
+    }
+  }
+
+  // ✅ HÀM LẤY BALANCE
   const getBalance = async (address) => {
     if (!window.ethereum) return 0
     try {
@@ -77,12 +137,16 @@ export default function DocumentVerification() {
           await new Promise(resolve => setTimeout(resolve, 2000))
         }
 
-        // ✅ LẤY BALANCE TRƯỚC
+        // Lấy balance
         setStatus('💰 Đang lấy balance...')
         const balance = await getBalance(userAccount)
-        console.log('💰 Balance thực tế:', balance)
         setUserBalance(balance)
         setHasSufficientBalance(balance >= MINIMUM_BALANCE)
+
+        // Lấy lịch sử giao dịch
+        setStatus('📚 Đang tải lịch sử giao dịch...')
+        const history = await getTransactionHistory(userAccount)
+        setTransactionHistory(history)
 
         // Tạo contract instance
         const signer = await provider.getSigner()
@@ -137,18 +201,11 @@ export default function DocumentVerification() {
   }
 
   const registerDocument = async () => {
-    console.log('🔍 DEBUG REGISTER:', {
-      userBalance,
-      hasSufficientBalance,
-      minimum: MINIMUM_BALANCE
-    })
-
     if (!contract) {
       alert('⚠️ Vui lòng kết nối ví trước')
       return
     }
     
-    // ✅ KIỂM TRA BALANCE ĐƠN GIẢN
     if (userBalance < MINIMUM_BALANCE) {
       alert(`❌ Không đủ tRBTC!\n\nBalance: ${userBalance.toFixed(6)} tRBTC\nCần ít nhất: ${MINIMUM_BALANCE} tRBTC`)
       return
@@ -172,11 +229,24 @@ export default function DocumentVerification() {
       
       const receipt = await tx.wait()
       
-      // ✅ CẬP NHẬT BALANCE SAU KHI THÀNH CÔNG
+      // Cập nhật balance và lịch sử
       const newBalance = await getBalance(account)
       setUserBalance(newBalance)
       setHasSufficientBalance(newBalance >= MINIMUM_BALANCE)
       
+      // Thêm vào lịch sử giao dịch
+      const newTransaction = {
+        hash: receipt.hash,
+        type: 'register',
+        documentHash: documentHash,
+        documentType: documentType,
+        timestamp: Date.now(),
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed.toString(),
+        status: receipt.status === 1 ? 'success' : 'failed'
+      }
+      
+      setTransactionHistory(prev => [newTransaction, ...prev])
       setStatus('✅ Đăng ký thành công!')
       alert(`🎉 THÀNH CÔNG! Transaction Hash: ${receipt.hash}`)
 
@@ -229,7 +299,44 @@ export default function DocumentVerification() {
     window.open('https://faucet.testnet.rsk.co', '_blank')
   }
 
-  // ✅ TÍNH TOÁN SỐ LẦN CÓ THỂ THỰC HIỆN
+  const viewTransactionDetails = async (txHash) => {
+    try {
+      setSelectedTransaction(null)
+      setShowTransactionModal(true)
+      
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const tx = await provider.getTransaction(txHash)
+      const receipt = await provider.getTransactionReceipt(txHash)
+      const block = await provider.getBlock(receipt.blockNumber)
+
+      setSelectedTransaction({
+        hash: txHash,
+        from: tx.from,
+        to: tx.to,
+        value: ethers.formatEther(tx.value),
+        gasUsed: receipt.gasUsed.toString(),
+        gasPrice: ethers.formatUnits(tx.gasPrice, 'gwei'),
+        blockNumber: receipt.blockNumber,
+        timestamp: block.timestamp * 1000,
+        status: receipt.status === 1 ? 'Thành công' : 'Thất bại',
+        confirmations: receipt.confirmations
+      })
+
+    } catch (error) {
+      console.error('Lỗi lấy chi tiết transaction:', error)
+      alert('Không thể lấy chi tiết transaction')
+    }
+  }
+
+  const openInExplorer = (txHash) => {
+    window.open(`https://explorer.testnet.rootstock.io/tx/${txHash}`, '_blank')
+  }
+
+  const formatTime = (timestamp) => {
+    return new Date(timestamp).toLocaleString('vi-VN')
+  }
+
+  // Tính toán số lần có thể thực hiện
   const canRegister = Math.floor(userBalance / 0.0003)
   const canVerify = Math.floor(userBalance / 0.00005)
 
@@ -310,6 +417,10 @@ export default function DocumentVerification() {
                   <div style={styles.statValue}>{canVerify}</div>
                   <div style={styles.statLabel}>Có thể xác minh</div>
                 </div>
+                <div style={styles.statItem}>
+                  <div style={styles.statValue}>{transactionHistory.length}</div>
+                  <div style={styles.statLabel}>Giao dịch</div>
+                </div>
               </div>
             )}
 
@@ -337,6 +448,16 @@ export default function DocumentVerification() {
                   <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
                 Xác minh tài liệu
+              </button>
+              <button 
+                style={activeTab === 'history' ? styles.activeTab : styles.tab}
+                onClick={() => setActiveTab('history')}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
+                  <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Lịch sử giao dịch
               </button>
             </div>
 
@@ -383,8 +504,8 @@ export default function DocumentVerification() {
                   {fileName && (
                     <div style={styles.fileNameDisplay}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M13 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V9L13 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        <path d="M13 2V9H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M13 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L13 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M13 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                       {fileName}
                     </div>
@@ -494,6 +615,70 @@ export default function DocumentVerification() {
               </div>
             )}
 
+            {/* Lịch sử giao dịch */}
+            {activeTab === 'history' && (
+              <div style={styles.formSection}>
+                <h3 style={styles.formTitle}>Lịch sử giao dịch</h3>
+                
+                {transactionHistory.length === 0 ? (
+                  <div style={styles.emptyState}>
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.emptyIcon}>
+                      <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <h4>Chưa có giao dịch nào</h4>
+                    <p>Thực hiện đăng ký tài liệu đầu tiên để xem lịch sử giao dịch</p>
+                  </div>
+                ) : (
+                  <div style={styles.transactionList}>
+                    {transactionHistory.map((tx, index) => (
+                      <div key={index} style={styles.transactionItem}>
+                        <div style={styles.transactionHeader}>
+                          <div style={styles.transactionType}>
+                            <span style={tx.type === 'register' ? styles.typeRegister : styles.typeVerify}>
+                              {tx.type === 'register' ? '📝 Đăng ký' : '🔍 Xác minh'}
+                            </span>
+                          </div>
+                          <div style={styles.transactionTime}>
+                            {formatTime(tx.timestamp)}
+                          </div>
+                        </div>
+                        
+                        <div style={styles.transactionBody}>
+                          <div style={styles.transactionHash}>
+                            Hash: {tx.hash.substring(0, 10)}...{tx.hash.substring(tx.hash.length - 8)}
+                          </div>
+                          <div style={styles.documentHash}>
+                            Document: {tx.documentHash.substring(0, 12)}...{tx.documentHash.substring(tx.documentHash.length - 8)}
+                          </div>
+                        </div>
+                        
+                        <div style={styles.transactionFooter}>
+                          <div style={tx.status === 'success' ? styles.statusSuccess : styles.statusFailed}>
+                            {tx.status === 'success' ? '✅ Thành công' : '❌ Thất bại'}
+                          </div>
+                          <div style={styles.transactionActions}>
+                            <button 
+                              onClick={() => viewTransactionDetails(tx.hash)}
+                              style={styles.detailButton}
+                            >
+                              Chi tiết
+                            </button>
+                            <button 
+                              onClick={() => openInExplorer(tx.hash)}
+                              style={styles.explorerButton}
+                            >
+                              Explorer
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Trạng thái hệ thống */}
             <div style={styles.statusSection}>
               <div style={styles.statusIndicator}>
@@ -504,458 +689,277 @@ export default function DocumentVerification() {
           </div>
         )}
       </div>
+
+      {/* Modal chi tiết transaction */}
+      {showTransactionModal && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modal}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>Chi tiết giao dịch</h3>
+              <button 
+                onClick={() => setShowTransactionModal(false)}
+                style={styles.closeButton}
+              >
+                ×
+              </button>
+            </div>
+            
+            {selectedTransaction ? (
+              <div style={styles.modalContent}>
+                <div style={styles.detailGrid}>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Transaction Hash:</span>
+                    <span style={styles.detailValue}>{selectedTransaction.hash}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Trạng thái:</span>
+                    <span style={selectedTransaction.status === 'Thành công' ? styles.statusSuccess : styles.statusFailed}>
+                      {selectedTransaction.status}
+                    </span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Block:</span>
+                    <span style={styles.detailValue}>{selectedTransaction.blockNumber}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Thời gian:</span>
+                    <span style={styles.detailValue}>{formatTime(selectedTransaction.timestamp)}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Gas Used:</span>
+                    <span style={styles.detailValue}>{selectedTransaction.gasUsed}</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Gas Price:</span>
+                    <span style={styles.detailValue}>{selectedTransaction.gasPrice} Gwei</span>
+                  </div>
+                  <div style={styles.detailRow}>
+                    <span style={styles.detailLabel}>Xác nhận:</span>
+                    <span style={styles.detailValue}>{selectedTransaction.confirmations}</span>
+                  </div>
+                </div>
+                
+                <div style={styles.modalActions}>
+                  <button 
+                    onClick={() => openInExplorer(selectedTransaction.hash)}
+                    style={styles.primaryButton}
+                  >
+                    Xem trên Explorer
+                  </button>
+                  <button 
+                    onClick={() => setShowTransactionModal(false)}
+                    style={styles.secondaryButton}
+                  >
+                    Đóng
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={styles.loadingModal}>
+                <div style={styles.spinner}></div>
+                <p>Đang tải chi tiết...</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Styles mới - thiết kế hiện đại
+// Thêm các styles mới cho lịch sử giao dịch và modal
 const styles = {
-  container: {
-    minHeight: '100vh',
-    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
-    padding: '20px',
-    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
+  // ... (giữ nguyên các styles cũ)
+
+  // Styles cho lịch sử giao dịch
+  emptyState: {
+    textAlign: 'center',
+    padding: '40px 20px',
+    color: '#718096'
   },
-  card: {
-    width: '100%',
-    maxWidth: '800px',
-    background: 'white',
-    borderRadius: '16px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)',
-    overflow: 'hidden'
+  emptyIcon: {
+    marginBottom: '16px',
+    color: '#cbd5e0'
   },
-  header: {
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    padding: '30px'
+  transactionList: {
+    maxHeight: '400px',
+    overflowY: 'auto'
   },
-  headerContent: {
-    marginBottom: '15px'
-  },
-  title: {
-    fontSize: '28px',
-    fontWeight: '700',
-    margin: '0 0 8px 0'
-  },
-  subtitle: {
-    fontSize: '16px',
-    opacity: '0.9',
-    margin: '0'
-  },
-  networkInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    flexWrap: 'wrap'
-  },
-  networkBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    background: 'rgba(255, 255, 255, 0.2)',
-    padding: '6px 12px',
-    borderRadius: '20px',
-    fontSize: '14px'
-  },
-  networkDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: '#4ade80'
-  },
-  contractInfo: {
-    fontSize: '14px',
-    opacity: '0.8'
-  },
-  connectSection: {
-    padding: '60px 40px',
-    textAlign: 'center'
-  },
-  walletIcon: {
-    color: '#667eea',
-    marginBottom: '20px'
-  },
-  connectTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    margin: '0 0 10px 0',
-    color: '#2d3748'
-  },
-  connectDescription: {
-    fontSize: '16px',
-    color: '#718096',
-    margin: '0 0 30px 0',
-    lineHeight: '1.5'
-  },
-  connectButton: {
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    border: 'none',
-    padding: '14px 28px',
-    borderRadius: '10px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-  },
-  statusContainer: {
-    marginTop: '20px'
-  },
-  status: {
-    background: 'rgba(102, 126, 234, 0.1)',
-    color: '#667eea',
-    padding: '10px 16px',
+  transactionItem: {
+    background: '#f7fafc',
+    border: '1px solid #e2e8f0',
     borderRadius: '8px',
-    fontSize: '14px',
-    display: 'inline-block'
+    padding: '16px',
+    marginBottom: '12px',
+    transition: 'all 0.2s ease'
   },
-  mainContent: {
-    padding: '30px'
-  },
-  accountSection: {
+  transactionHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '25px',
-    paddingBottom: '25px',
-    borderBottom: '1px solid #e2e8f0'
+    marginBottom: '12px'
   },
-  accountInfo: {
+  transactionType: {
+    fontSize: '14px',
+    fontWeight: '600'
+  },
+  typeRegister: {
+    background: '#bee3f8',
+    color: '#2c5282',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontSize: '12px'
+  },
+  typeVerify: {
+    background: '#c6f6d5',
+    color: '#22543d',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontSize: '12px'
+  },
+  transactionTime: {
+    fontSize: '12px',
+    color: '#718096'
+  },
+  transactionBody: {
+    marginBottom: '12px'
+  },
+  transactionHash: {
+    fontSize: '14px',
+    fontFamily: 'monospace',
+    color: '#4a5568',
+    marginBottom: '4px'
+  },
+  documentHash: {
+    fontSize: '12px',
+    fontFamily: 'monospace',
+    color: '#718096'
+  },
+  transactionFooter: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '15px'
+    justifyContent: 'space-between',
+    alignItems: 'center'
   },
-  avatar: {
-    width: '50px',
-    height: '50px',
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+  statusSuccess: {
+    color: '#38a169',
+    fontSize: '14px',
+    fontWeight: '600'
+  },
+  statusFailed: {
+    color: '#e53e3e',
+    fontSize: '14px',
+    fontWeight: '600'
+  },
+  transactionActions: {
+    display: 'flex',
+    gap: '8px'
+  },
+  detailButton: {
+    background: '#edf2f7',
+    color: '#4a5568',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+  explorerButton: {
+    background: '#667eea',
+    color: 'white',
+    border: 'none',
+    padding: '6px 12px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+
+  // Styles cho modal
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0, 0, 0, 0.5)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: 'white',
-    fontWeight: '600',
-    fontSize: '16px'
+    zIndex: 1000,
+    padding: '20px'
   },
-  accountDetails: {
+  modal: {
+    background: 'white',
+    borderRadius: '12px',
+    width: '100%',
+    maxWidth: '500px',
+    maxHeight: '90vh',
+    overflow: 'auto',
+    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)'
+  },
+  modalHeader: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: '5px'
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '20px',
+    borderBottom: '1px solid #e2e8f0'
   },
-  accountAddress: {
-    margin: '0',
+  modalTitle: {
+    margin: 0,
     fontSize: '18px',
     fontWeight: '600',
     color: '#2d3748'
   },
-  balanceInfo: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px'
-  },
-  balanceAmount: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#2d3748'
-  },
-  balanceStatusGood: {
-    background: '#c6f6d5',
-    color: '#22543d',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500'
-  },
-  balanceStatusLow: {
-    background: '#fed7d7',
-    color: '#742a2a',
-    padding: '2px 8px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500'
-  },
-  balanceActions: {
-    display: 'flex',
-    gap: '10px'
-  },
-  faucetButton: {
-    background: '#edf2f7',
-    color: '#4a5568',
+  closeButton: {
+    background: 'none',
     border: 'none',
-    padding: '8px 16px',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease'
-  },
-  balanceStats: {
-    display: 'flex',
-    gap: '20px',
-    marginBottom: '25px'
-  },
-  statItem: {
-    flex: '1',
-    background: '#f7fafc',
-    padding: '15px',
-    borderRadius: '10px',
-    textAlign: 'center'
-  },
-  statValue: {
     fontSize: '24px',
-    fontWeight: '700',
-    color: '#667eea',
-    marginBottom: '5px'
-  },
-  statLabel: {
-    fontSize: '14px',
-    color: '#718096'
-  },
-  tabContainer: {
-    display: 'flex',
-    background: '#f7fafc',
-    borderRadius: '10px',
-    padding: '5px',
-    marginBottom: '25px'
-  },
-  tab: {
-    flex: '1',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '12px 16px',
-    background: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
+    cursor: 'pointer',
     color: '#718096',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease'
-  },
-  activeTab: {
-    flex: '1',
+    padding: '0',
+    width: '30px',
+    height: '30px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    padding: '12px 16px',
-    background: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#667eea',
-    cursor: 'pointer',
-    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
-    transition: 'all 0.2s ease'
+    justifyContent: 'center'
   },
-  tabIcon: {
-    // Icon styles are defined inline
+  modalContent: {
+    padding: '20px'
   },
-  formSection: {
-    marginBottom: '25px'
-  },
-  formTitle: {
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#2d3748',
-    margin: '0 0 20px 0'
-  },
-  formGroup: {
-    marginBottom: '20px'
-  },
-  label: {
-    display: 'block',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#4a5568',
-    marginBottom: '8px'
-  },
-  select: {
-    width: '100%',
-    padding: '12px 16px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '16px',
-    backgroundColor: 'white',
-    transition: 'all 0.2s ease',
-    appearance: 'none',
-    backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%204%205'><path%20fill='%23666'%20d='M2%200L0%202h4zm0%205L0%203h4z'/></svg>")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 12px center',
-    backgroundSize: '10px'
-  },
-  input: {
-    width: '100%',
-    padding: '12px 16px',
-    border: '1px solid #e2e8f0',
-    borderRadius: '8px',
-    fontSize: '16px',
-    transition: 'all 0.2s ease',
-    boxSizing: 'border-box'
-  },
-  fileUploadArea: {
-    position: 'relative'
-  },
-  fileInput: {
-    position: 'absolute',
-    width: '1px',
-    height: '1px',
-    padding: '0',
-    margin: '-1px',
-    overflow: 'hidden',
-    clip: 'rect(0, 0, 0, 0)',
-    border: '0'
-  },
-  fileUploadLabel: {
+  detailGrid: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '40px 20px',
-    border: '2px dashed #e2e8f0',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    textAlign: 'center',
-    color: '#718096'
-  },
-  uploadIcon: {
-    marginBottom: '12px',
-    color: '#a0aec0'
-  },
-  fileUploadHint: {
-    fontSize: '14px',
-    margin: '8px 0 0 0',
-    color: '#a0aec0'
-  },
-  fileNameDisplay: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '10px 12px',
-    background: '#f7fafc',
-    borderRadius: '6px',
-    marginTop: '10px',
-    fontSize: '14px',
-    color: '#4a5568'
-  },
-  hashSection: {
+    gap: '12px',
     marginBottom: '20px'
   },
-  hashDisplay: {
-    padding: '12px 16px',
-    background: '#f7fafc',
-    borderRadius: '8px',
+  detailRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 0',
+    borderBottom: '1px solid #f7fafc'
+  },
+  detailLabel: {
+    fontWeight: '500',
+    color: '#4a5568',
+    fontSize: '14px'
+  },
+  detailValue: {
+    color: '#2d3748',
     fontSize: '14px',
     fontFamily: 'monospace',
     wordBreak: 'break-all',
-    color: '#4a5568'
+    textAlign: 'right'
   },
-  primaryButton: {
-    width: '100%',
-    padding: '14px 20px',
-    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
+  modalActions: {
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px',
-    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-  },
-  secondaryButton: {
-    width: '100%',
-    padding: '14px 20px',
-    background: '#edf2f7',
-    color: '#4a5568',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '16px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px'
-  },
-  disabledButton: {
-    opacity: '0.6',
-    cursor: 'not-allowed'
-  },
-  spinner: {
-    width: '18px',
-    height: '18px',
-    border: '2px solid transparent',
-    borderTop: '2px solid currentColor',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
-  },
-  warningBox: {
-    display: 'flex',
-    alignItems: 'flex-start',
     gap: '12px',
-    padding: '16px',
-    background: '#fff5f5',
-    border: '1px solid #fed7d7',
-    borderRadius: '8px',
-    marginTop: '20px',
-    color: '#c53030'
+    justifyContent: 'flex-end'
   },
-  resultBox: {
-    padding: '20px',
-    borderRadius: '8px',
-    marginTop: '20px'
-  },
-  validResult: {
-    background: '#f0fff4',
-    border: '1px solid #9ae6b4',
-    color: '#22543d'
-  },
-  invalidResult: {
-    background: '#fff5f5',
-    border: '1px solid #fc8181',
-    color: '#c53030'
-  },
-  resultHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    marginBottom: '8px'
-  },
-  resultDescription: {
-    margin: '0',
-    fontSize: '14px',
-    opacity: '0.9'
-  },
-  statusSection: {
-    paddingTop: '20px',
-    borderTop: '1px solid #e2e8f0'
-  },
-  statusIndicator: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    fontSize: '14px',
+  loadingModal: {
+    padding: '40px',
+    textAlign: 'center',
     color: '#718096'
-  },
-  statusDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: '#48bb78',
-    animation: 'pulse 2s infinite'
   }
 }
