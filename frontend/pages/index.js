@@ -28,13 +28,32 @@ export default function DocumentVerification() {
   const MINIMUM_BALANCE = 0.00005
   const CONTRACT_ADDRESS = "0xF561493424f457938C078a304e5B6F96765cec1d"
   
+  // ✅ ABI ĐẦY ĐỦ - FIXED
   const contractABI = [
-    "function registerDocument(string _documentHash, string _documentType) external",
-    "function verifyDocument(string _documentHash) external view returns (bool)",
-    "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp)"
+    "function registerDocument(string memory _documentHash, string memory _documentType) external",
+    "function verifyDocument(string memory _documentHash) external view returns (bool)",
+    "function getDocumentOwner(string memory _documentHash) external view returns (address)",
+    "function isDocumentRegistered(string memory _documentHash) external view returns (bool)",
+    "event DocumentRegistered(string indexed documentHash, address indexed owner, uint256 timestamp, string documentType)",
+    "error DocumentAlreadyRegistered()",
+    "error DocumentNotRegistered()"
   ]
 
-  // ✅ HÀM LẤY LỊCH SỬ GIAO DỊCH
+  // ✅ HÀM KIỂM TRA CONTRACT
+  const checkContractExists = async () => {
+    if (!window.ethereum) return false
+    
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum)
+      const code = await provider.getCode(CONTRACT_ADDRESS)
+      return code !== '0x'
+    } catch (error) {
+      console.error('Lỗi kiểm tra contract:', error)
+      return false
+    }
+  }
+
+  // ✅ HÀM LẤY LỊCH SỬ GIAO DỊCH - IMPROVED
   const getTransactionHistory = async (address) => {
     if (!window.ethereum) return []
 
@@ -58,25 +77,30 @@ export default function DocumentVerification() {
 
       const history = await Promise.all(
         userEvents.map(async (event) => {
-          const tx = await provider.getTransaction(event.transactionHash)
-          const receipt = await provider.getTransactionReceipt(event.transactionHash)
-          const block = await provider.getBlock(receipt.blockNumber)
+          try {
+            const tx = await provider.getTransaction(event.transactionHash)
+            const receipt = await provider.getTransactionReceipt(event.transactionHash)
+            const block = await provider.getBlock(receipt.blockNumber)
 
-          return {
-            hash: event.transactionHash,
-            type: 'register',
-            documentHash: event.args.documentHash,
-            documentType: 'CMND',
-            timestamp: block.timestamp * 1000,
-            blockNumber: receipt.blockNumber,
-            gasUsed: receipt.gasUsed.toString(),
-            gasPrice: tx.gasPrice ? ethers.formatUnits(tx.gasPrice, 'gwei') : '0',
-            status: receipt.status === 1 ? 'success' : 'failed'
+            return {
+              hash: event.transactionHash,
+              type: 'register',
+              documentHash: event.args.documentHash,
+              documentType: event.args.documentType || 'CMND',
+              timestamp: block.timestamp * 1000,
+              blockNumber: receipt.blockNumber,
+              gasUsed: receipt.gasUsed.toString(),
+              gasPrice: tx.gasPrice ? ethers.formatUnits(tx.gasPrice, 'gwei') : '0',
+              status: receipt.status === 1 ? 'success' : 'failed'
+            }
+          } catch (error) {
+            console.error('Lỗi xử lý event:', error)
+            return null
           }
         })
       )
 
-      return history.sort((a, b) => b.timestamp - a.timestamp)
+      return history.filter(item => item !== null).sort((a, b) => b.timestamp - a.timestamp)
 
     } catch (error) {
       console.error('Lỗi lấy lịch sử giao dịch:', error)
@@ -97,6 +121,7 @@ export default function DocumentVerification() {
     }
   }
 
+  // ✅ KẾT NỐI VÍ - IMPROVED
   const connectWallet = async () => {
     if (typeof window.ethereum !== 'undefined') {
       try {
@@ -111,12 +136,13 @@ export default function DocumentVerification() {
         const provider = new ethers.BrowserProvider(window.ethereum)
         const network = await provider.getNetwork()
         
+        // Kiểm tra network (Rootstock Testnet chainId = 31)
         if (network.chainId !== 31n) {
           setStatus('🔄 Đang chuyển sang Rootstock Testnet...')
           try {
             await window.ethereum.request({
               method: 'wallet_switchEthereumChain',
-              params: [{ chainId: '0x1F' }]
+              params: [{ chainId: '0x1F' }] // 31 in hex
             })
           } catch (switchError) {
             if (switchError.code === 4902) {
@@ -125,14 +151,27 @@ export default function DocumentVerification() {
                 params: [{
                   chainId: '0x1F',
                   chainName: 'Rootstock Testnet',
-                  nativeCurrency: { name: 'tRBTC', symbol: 'tRBTC', decimals: 18 },
+                  nativeCurrency: { 
+                    name: 'tRBTC', 
+                    symbol: 'tRBTC', 
+                    decimals: 18 
+                  },
                   rpcUrls: ['https://public-node.testnet.rsk.co'],
                   blockExplorerUrls: ['https://explorer.testnet.rootstock.io/']
                 }]
               })
+            } else {
+              throw switchError
             }
           }
-          await new Promise(resolve => setTimeout(resolve, 2000))
+          // Đợi network chuyển đổi
+          await new Promise(resolve => setTimeout(resolve, 3000))
+        }
+
+        setStatus('🔍 Đang kiểm tra contract...')
+        const contractExists = await checkContractExists()
+        if (!contractExists) {
+          throw new Error('Contract không tồn tại tại địa chỉ này. Vui lòng kiểm tra địa chỉ contract.')
         }
 
         setStatus('💰 Đang lấy balance...')
@@ -153,13 +192,22 @@ export default function DocumentVerification() {
       } catch (error) {
         console.error('Lỗi kết nối:', error)
         setStatus('❌ Lỗi kết nối')
-        alert('Lỗi: ' + error.message)
+        
+        if (error.code === 4001) {
+          alert('❌ Người dùng từ chối kết nối ví')
+        } else if (error.message.includes('Contract không tồn tại')) {
+          alert('❌ Contract không tồn tại. Vui lòng kiểm tra địa chỉ contract.')
+        } else {
+          alert('❌ Lỗi kết nối: ' + error.message)
+        }
       }
     } else {
       alert('⚠️ Vui lòng cài đặt MetaMask!')
+      setStatus('❌ MetaMask không được tìm thấy')
     }
   }
 
+  // ✅ TÍNH TOÁN HASH FILE
   const calculateFileHash = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -179,30 +227,34 @@ export default function DocumentVerification() {
     })
   }
 
+  // ✅ UPLOAD FILE
   const handleFileUpload = async (event) => {
     const file = event.target.files[0]
-    if (file) {
-      setLoading(true)
-      try {
-        const hash = await calculateFileHash(file)
-        setDocumentHash(hash)
-        setFileName(file.name)
-        alert(`📄 Đã tạo hash: ${file.name}\n\n🔐 ${hash}`)
-      } catch (error) {
-        alert('❌ Lỗi file: ' + error.message)
-      }
-      setLoading(false)
+    if (!file) return
+
+    // Kiểm tra kích thước file (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('❌ File quá lớn! Kích thước tối đa là 10MB.')
+      return
     }
+
+    setLoading(true)
+    try {
+      const hash = await calculateFileHash(file)
+      setDocumentHash(hash)
+      setFileName(file.name)
+      alert(`📄 Đã tạo hash: ${file.name}\n\n🔐 ${hash}`)
+    } catch (error) {
+      console.error('Lỗi tính hash:', error)
+      alert('❌ Lỗi xử lý file: ' + error.message)
+    }
+    setLoading(false)
   }
 
+  // ✅ ĐĂNG KÝ DOCUMENT - FIXED TRANSACTION
   const registerDocument = async () => {
     if (!contract) {
       alert('⚠️ Vui lòng kết nối ví trước')
-      return
-    }
-    
-    if (userBalance < MINIMUM_BALANCE) {
-      alert(`❌ Không đủ tRBTC!\n\nBalance: ${userBalance.toFixed(6)} tRBTC\nCần ít nhất: ${MINIMUM_BALANCE} tRBTC`)
       return
     }
     
@@ -211,55 +263,104 @@ export default function DocumentVerification() {
       return
     }
 
+    // Kiểm tra contract tồn tại
+    const contractExists = await checkContractExists()
+    if (!contractExists) {
+      alert('❌ Contract không tồn tại! Vui lòng kiểm tra kết nối.')
+      return
+    }
+
     try {
       setLoading(true)
+      setStatus('🔍 Đang kiểm tra document...')
+
+      // Kiểm tra xem document đã được đăng ký chưa
+      try {
+        const isRegistered = await contract.isDocumentRegistered(documentHash)
+        if (isRegistered) {
+          alert('❌ Document đã được đăng ký trước đó!')
+          setLoading(false)
+          return
+        }
+      } catch (error) {
+        console.log('Không thể kiểm tra trạng thái document, tiếp tục đăng ký...')
+      }
+
       setStatus('🔄 Đang gửi transaction...')
 
+      // Gửi transaction với gas limit cao hơn
       const tx = await contract.registerDocument(documentHash, documentType, {
-        gasLimit: 500000,
-        gasPrice: ethers.parseUnits('1', 'gwei')
+        gasLimit: 300000, // Tăng gas limit
+        gasPrice: ethers.parseUnits('2', 'gwei') // Tăng gas price
       })
       
-      alert('⏳ Đang xác nhận transaction...')
+      setStatus('⏳ Đang chờ xác nhận...')
+      alert('⏳ Transaction đã được gửi. Đang chờ xác nhận...')
       
       const receipt = await tx.wait()
       
-      const newBalance = await getBalance(account)
-      setUserBalance(newBalance)
-      setHasSufficientBalance(newBalance >= MINIMUM_BALANCE)
-      
-      const newTransaction = {
-        hash: receipt.hash,
-        type: 'register',
-        documentHash: documentHash,
-        documentType: documentType,
-        timestamp: Date.now(),
-        blockNumber: receipt.blockNumber,
-        gasUsed: receipt.gasUsed.toString(),
-        status: receipt.status === 1 ? 'success' : 'failed'
+      if (receipt.status === 1) {
+        // Cập nhật balance
+        const newBalance = await getBalance(account)
+        setUserBalance(newBalance)
+        setHasSufficientBalance(newBalance >= MINIMUM_BALANCE)
+        
+        // Thêm vào lịch sử
+        const newTransaction = {
+          hash: receipt.hash,
+          type: 'register',
+          documentHash: documentHash,
+          documentType: documentType,
+          timestamp: Date.now(),
+          blockNumber: receipt.blockNumber,
+          gasUsed: receipt.gasUsed.toString(),
+          status: 'success'
+        }
+        
+        setTransactionHistory(prev => [newTransaction, ...prev])
+        setStatus('✅ Đăng ký thành công!')
+        
+        alert(`🎉 ĐĂNG KÝ THÀNH CÔNG!\n\nTransaction Hash: ${receipt.hash}\nBlock: ${receipt.blockNumber}\nGas Used: ${receipt.gasUsed.toString()}`)
+        
+        // Reset form
+        setDocumentHash('')
+        setFileName('')
+        
+      } else {
+        throw new Error('Transaction failed')
       }
-      
-      setTransactionHistory(prev => [newTransaction, ...prev])
-      setStatus('✅ Đăng ký thành công!')
-      alert(`🎉 THÀNH CÔNG! Transaction Hash: ${receipt.hash}`)
 
     } catch (error) {
       console.error('Lỗi transaction:', error)
       setStatus('❌ Lỗi transaction')
+      
+      // Xử lý lỗi chi tiết
       if (error.code === 'ACTION_REJECTED') {
         alert('❌ Bạn đã từ chối transaction')
       } else if (error.code === 'INSUFFICIENT_FUNDS') {
-        alert('❌ Không đủ tRBTC!')
+        alert(`❌ Không đủ tRBTC cho gas fee!\n\nBalance: ${userBalance.toFixed(6)} tRBTC`)
+      } else if (error.reason) {
+        alert(`❌ Lỗi từ smart contract: ${error.reason}`)
+      } else if (error.message.includes('already registered')) {
+        alert('❌ Document đã được đăng ký trước đó!')
       } else {
-        alert('❌ Lỗi: ' + error.message)
+        alert(`❌ Lỗi không xác định: ${error.message || 'Vui lòng thử lại'}`)
       }
     }
     setLoading(false)
   }
 
+  // ✅ XÁC MINH DOCUMENT
   const verifyDocument = async () => {
     if (!documentHash) {
       alert('⚠️ Vui lòng nhập hash document')
+      return
+    }
+
+    // Kiểm tra contract tồn tại
+    const contractExists = await checkContractExists()
+    if (!contractExists) {
+      alert('❌ Contract không tồn tại! Vui lòng kiểm tra kết nối.')
       return
     }
 
@@ -278,20 +379,29 @@ export default function DocumentVerification() {
       console.error('Lỗi xác minh:', error)
       setVerificationResult('❌ LỖI XÁC MINH')
       setStatus('❌ Lỗi xác minh')
+      
+      if (error.reason) {
+        alert(`Lỗi xác minh: ${error.reason}`)
+      } else {
+        alert('Lỗi xác minh document. Vui lòng thử lại.')
+      }
     }
     setLoading(false)
   }
 
+  // ✅ CLEAR KẾT QUẢ
   const clearResults = () => {
     setDocumentHash('')
     setFileName('')
     setVerificationResult('')
   }
 
+  // ✅ LẤY TEST RBTC
   const getTestRBTC = () => {
     window.open('https://faucet.testnet.rsk.co', '_blank')
   }
 
+  // ✅ XEM CHI TIẾT TRANSACTION
   const viewTransactionDetails = async (txHash) => {
     try {
       setSelectedTransaction(null)
@@ -321,14 +431,17 @@ export default function DocumentVerification() {
     }
   }
 
+  // ✅ MỞ EXPLORER
   const openInExplorer = (txHash) => {
     window.open(`https://explorer.testnet.rootstock.io/tx/${txHash}`, '_blank')
   }
 
+  // ✅ ĐỊNH DẠNG THỜI GIAN
   const formatTime = (timestamp) => {
     return new Date(timestamp).toLocaleString('vi-VN')
   }
 
+  // ✅ XỬ LÝ CONTACT FORM
   const handleContactSubmit = (e) => {
     e.preventDefault()
     alert('Cảm ơn bạn đã liên hệ! Chúng tôi sẽ phản hồi sớm nhất.')
@@ -347,10 +460,31 @@ export default function DocumentVerification() {
     })
   }
 
+  // ✅ TÍNH TOÁN SỐ LƯỢNG CÓ THỂ THỰC HIỆN
   const canRegister = Math.floor(userBalance / 0.0003)
   const canVerify = Math.floor(userBalance / 0.00005)
 
-  // Render các trang khác nhau
+  // ✅ EFFECT ĐỂ THEO DÕI ACCOUNT THAY ĐỔI
+  useEffect(() => {
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0])
+          connectWallet()
+        } else {
+          setAccount('')
+          setContract(null)
+          setStatus('🔗 Kết nối Rootstock Testnet')
+        }
+      })
+
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload()
+      })
+    }
+  }, [])
+
+  // ✅ RENDER CÁC TRANG
   const renderPage = () => {
     switch (currentPage) {
       case 'features':
@@ -2196,12 +2330,6 @@ const globalStyles = `
   100% { transform: rotate(360deg); }
 }
 
-@keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
-}
-
 * {
   box-sizing: border-box;
 }
@@ -2212,7 +2340,7 @@ body {
 }
 
 /* Hover effects */
-button:hover {
+button:hover:not(:disabled) {
   transform: translateY(-1px);
 }
 
@@ -2230,11 +2358,11 @@ button:hover {
   color: white;
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
-.secondary-button:hover {
+.secondary-button:hover:not(:disabled) {
   background: #e2e8f0;
 }
 
@@ -2318,4 +2446,8 @@ if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style')
   styleSheet.textContent = globalStyles
   document.head.appendChild(styleSheet)
-} 
+}
+
+// Note: DocumentVerification is already exported as the default at its declaration:
+//   export default function DocumentVerification() { ... }
+// so no additional default export is needed here.
