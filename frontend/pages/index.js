@@ -767,9 +767,487 @@ export default function DocumentVerification() {
   )
 }
 
-// Thêm các styles mới cho lịch sử giao dịch và modal
 const styles = {
-  // ... (giữ nguyên các styles cũ)
+  container: {
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+    padding: '20px',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  card: {
+    width: '100%',
+    maxWidth: '800px',
+    background: 'white',
+    borderRadius: '16px',
+    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)',
+    overflow: 'hidden'
+  },
+  header: {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    padding: '30px'
+  },
+  headerContent: {
+    marginBottom: '15px'
+  },
+  title: {
+    fontSize: '28px',
+    fontWeight: '700',
+    margin: '0 0 8px 0'
+  },
+  subtitle: {
+    fontSize: '16px',
+    opacity: '0.9',
+    margin: '0'
+  },
+  networkInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    flexWrap: 'wrap'
+  },
+  networkBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    background: 'rgba(255, 255, 255, 0.2)',
+    padding: '6px 12px',
+    borderRadius: '20px',
+    fontSize: '14px'
+  },
+  networkDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: '#4ade80'
+  },
+  contractInfo: {
+    fontSize: '14px',
+    opacity: '0.8'
+  },
+  connectSection: {
+    padding: '60px 40px',
+    textAlign: 'center'
+  },
+  walletIcon: {
+    color: '#667eea',
+    marginBottom: '20px'
+  },
+  connectTitle: {
+    fontSize: '24px',
+    fontWeight: '600',
+    margin: '0 0 10px 0',
+    color: '#2d3748'
+  },
+  connectDescription: {
+    fontSize: '16px',
+    color: '#718096',
+    margin: '0 0 30px 0',
+    lineHeight: '1.5'
+  },
+  connectButton: {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    border: 'none',
+    padding: '14px 28px',
+    borderRadius: '10px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+    ':hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
+    }
+  },
+  statusContainer: {
+    marginTop: '20px'
+  },
+  status: {
+    background: 'rgba(102, 126, 234, 0.1)',
+    color: '#667eea',
+    padding: '10px 16px',
+    borderRadius: '8px',
+    fontSize: '14px',
+    display: 'inline-block'
+  },
+  mainContent: {
+    padding: '30px'
+  },
+  accountSection: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '25px',
+    paddingBottom: '25px',
+    borderBottom: '1px solid #e2e8f0'
+  },
+  accountInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px'
+  },
+  avatar: {
+    width: '50px',
+    height: '50px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white',
+    fontWeight: '600',
+    fontSize: '16px'
+  },
+  accountDetails: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px'
+  },
+  accountAddress: {
+    margin: '0',
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#2d3748'
+  },
+  balanceInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  balanceAmount: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#2d3748'
+  },
+  balanceStatusGood: {
+    background: '#c6f6d5',
+    color: '#22543d',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '500'
+  },
+  balanceStatusLow: {
+    background: '#fed7d7',
+    color: '#742a2a',
+    padding: '2px 8px',
+    borderRadius: '12px',
+    fontSize: '12px',
+    fontWeight: '500'
+  },
+  balanceActions: {
+    display: 'flex',
+    gap: '10px'
+  },
+  faucetButton: {
+    background: '#edf2f7',
+    color: '#4a5568',
+    border: 'none',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    ':hover': {
+      background: '#e2e8f0'
+    }
+  },
+  balanceStats: {
+    display: 'flex',
+    gap: '20px',
+    marginBottom: '25px'
+  },
+  statItem: {
+    flex: '1',
+    background: '#f7fafc',
+    padding: '15px',
+    borderRadius: '10px',
+    textAlign: 'center'
+  },
+  statValue: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#667eea',
+    marginBottom: '5px'
+  },
+  statLabel: {
+    fontSize: '14px',
+    color: '#718096'
+  },
+  tabContainer: {
+    display: 'flex',
+    background: '#f7fafc',
+    borderRadius: '10px',
+    padding: '5px',
+    marginBottom: '25px'
+  },
+  tab: {
+    flex: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '12px 16px',
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#718096',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+  activeTab: {
+    flex: '1',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    padding: '12px 16px',
+    background: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#667eea',
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+    transition: 'all 0.2s ease'
+  },
+  tabIcon: {
+    // Icon styles
+  },
+  formSection: {
+    marginBottom: '25px'
+  },
+  formTitle: {
+    fontSize: '20px',
+    fontWeight: '600',
+    color: '#2d3748',
+    margin: '0 0 20px 0'
+  },
+  formGroup: {
+    marginBottom: '20px'
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#4a5568',
+    marginBottom: '8px'
+  },
+  select: {
+    width: '100%',
+    padding: '12px 16px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    fontSize: '16px',
+    backgroundColor: 'white',
+    transition: 'all 0.2s ease',
+    appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml;charset=US-ASCII,<svg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%204%205'><path%20fill='%23666'%20d='M2%200L0%202h4zm0%205L0%203h4z'/></svg>")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 12px center',
+    backgroundSize: '10px',
+    ':focus': {
+      outline: 'none',
+      borderColor: '#667eea',
+      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)'
+    }
+  },
+  input: {
+    width: '100%',
+    padding: '12px 16px',
+    border: '1px solid #e2e8f0',
+    borderRadius: '8px',
+    fontSize: '16px',
+    transition: 'all 0.2s ease',
+    boxSizing: 'border-box',
+    ':focus': {
+      outline: 'none',
+      borderColor: '#667eea',
+      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)'
+    }
+  },
+  fileUploadArea: {
+    position: 'relative'
+  },
+  fileInput: {
+    position: 'absolute',
+    width: '1px',
+    height: '1px',
+    padding: '0',
+    margin: '-1px',
+    overflow: 'hidden',
+    clip: 'rect(0, 0, 0, 0)',
+    border: '0'
+  },
+  fileUploadLabel: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '40px 20px',
+    border: '2px dashed #e2e8f0',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    textAlign: 'center',
+    color: '#718096',
+    ':hover': {
+      borderColor: '#667eea',
+      color: '#667eea'
+    }
+  },
+  uploadIcon: {
+    marginBottom: '12px',
+    color: '#a0aec0'
+  },
+  fileUploadHint: {
+    fontSize: '14px',
+    margin: '8px 0 0 0',
+    color: '#a0aec0'
+  },
+  fileNameDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '10px 12px',
+    background: '#f7fafc',
+    borderRadius: '6px',
+    marginTop: '10px',
+    fontSize: '14px',
+    color: '#4a5568'
+  },
+  hashSection: {
+    marginBottom: '20px'
+  },
+  hashDisplay: {
+    padding: '12px 16px',
+    background: '#f7fafc',
+    borderRadius: '8px',
+    fontSize: '14px',
+    fontFamily: 'monospace',
+    wordBreak: 'break-all',
+    color: '#4a5568'
+  },
+  primaryButton: {
+    width: '100%',
+    padding: '14px 20px',
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
+    ':hover': {
+      transform: 'translateY(-1px)',
+      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
+    }
+  },
+  secondaryButton: {
+    width: '100%',
+    padding: '14px 20px',
+    background: '#edf2f7',
+    color: '#4a5568',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    ':hover': {
+      background: '#e2e8f0'
+    }
+  },
+  disabledButton: {
+    opacity: '0.6',
+    cursor: 'not-allowed',
+    ':hover': {
+      transform: 'none',
+      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
+    }
+  },
+  spinner: {
+    width: '18px',
+    height: '18px',
+    border: '2px solid transparent',
+    borderTop: '2px solid currentColor',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
+  },
+  warningBox: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    padding: '16px',
+    background: '#fff5f5',
+    border: '1px solid #fed7d7',
+    borderRadius: '8px',
+    marginTop: '20px',
+    color: '#c53030'
+  },
+  resultBox: {
+    padding: '20px',
+    borderRadius: '8px',
+    marginTop: '20px'
+  },
+  validResult: {
+    background: '#f0fff4',
+    border: '1px solid #9ae6b4',
+    color: '#22543d'
+  },
+  invalidResult: {
+    background: '#fff5f5',
+    border: '1px solid #fc8181',
+    color: '#c53030'
+  },
+  resultHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '8px'
+  },
+  resultDescription: {
+    margin: '0',
+    fontSize: '14px',
+    opacity: '0.9'
+  },
+  statusSection: {
+    paddingTop: '20px',
+    borderTop: '1px solid #e2e8f0'
+  },
+  statusIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    fontSize: '14px',
+    color: '#718096'
+  },
+  statusDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    background: '#48bb78',
+    animation: 'pulse 2s infinite'
+  },
 
   // Styles cho lịch sử giao dịch
   emptyState: {
@@ -791,7 +1269,11 @@ const styles = {
     borderRadius: '8px',
     padding: '16px',
     marginBottom: '12px',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
+    ':hover': {
+      borderColor: '#cbd5e0',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
+    }
   },
   transactionHeader: {
     display: 'flex',
@@ -808,14 +1290,16 @@ const styles = {
     color: '#2c5282',
     padding: '4px 8px',
     borderRadius: '6px',
-    fontSize: '12px'
+    fontSize: '12px',
+    fontWeight: '500'
   },
   typeVerify: {
     background: '#c6f6d5',
     color: '#22543d',
     padding: '4px 8px',
     borderRadius: '6px',
-    fontSize: '12px'
+    fontSize: '12px',
+    fontWeight: '500'
   },
   transactionTime: {
     fontSize: '12px',
@@ -862,7 +1346,10 @@ const styles = {
     borderRadius: '6px',
     fontSize: '12px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
+    ':hover': {
+      background: '#e2e8f0'
+    }
   },
   explorerButton: {
     background: '#667eea',
@@ -872,7 +1359,10 @@ const styles = {
     borderRadius: '6px',
     fontSize: '12px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease'
+    transition: 'all 0.2s ease',
+    ':hover': {
+      background: '#5a6fd8'
+    }
   },
 
   // Styles cho modal
@@ -922,7 +1412,13 @@ const styles = {
     height: '30px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    borderRadius: '50%',
+    transition: 'all 0.2s ease',
+    ':hover': {
+      background: '#f7fafc',
+      color: '#4a5568'
+    }
   },
   modalContent: {
     padding: '20px'
@@ -962,4 +1458,53 @@ const styles = {
     textAlign: 'center',
     color: '#718096'
   }
+}
+
+// Thêm CSS animations
+const globalStyles = `
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+`
+
+// Thêm global styles vào document
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style')
+  styleSheet.textContent = globalStyles
+  document.head.appendChild(styleSheet)
 }
