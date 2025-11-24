@@ -16,6 +16,13 @@ export default function DocumentVerification() {
   const [transactionHistory, setTransactionHistory] = useState([])
   const [showTransactionModal, setShowTransactionModal] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState(null)
+  const [currentPage, setCurrentPage] = useState('home')
+  const [contactForm, setContactForm] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
+  })
 
   // ✅ CONSTANTS
   const MINIMUM_BALANCE = 0.00005
@@ -322,15 +329,223 @@ export default function DocumentVerification() {
     return new Date(timestamp).toLocaleString('vi-VN')
   }
 
+  const handleContactSubmit = (e) => {
+    e.preventDefault()
+    alert('Cảm ơn bạn đã liên hệ! Chúng tôi sẽ phản hồi sớm nhất.')
+    setContactForm({
+      name: '',
+      email: '',
+      subject: '',
+      message: ''
+    })
+  }
+
+  const handleContactChange = (e) => {
+    setContactForm({
+      ...contactForm,
+      [e.target.name]: e.target.value
+    })
+  }
+
   const canRegister = Math.floor(userBalance / 0.0003)
   const canVerify = Math.floor(userBalance / 0.00005)
+
+  // Render các trang khác nhau
+  const renderPage = () => {
+    switch (currentPage) {
+      case 'features':
+        return <FeaturesPage />
+      case 'about':
+        return <AboutPage />
+      case 'contact':
+        return <ContactPage 
+          contactForm={contactForm}
+          onChange={handleContactChange}
+          onSubmit={handleContactSubmit}
+        />
+      case 'home':
+      default:
+        return (
+          <>
+            <div style={styles.heroSection}>
+              <div style={styles.heroContent}>
+                <h1 style={styles.heroTitle}>Xác thực giấy tờ điện tử</h1>
+                <p style={styles.heroSubtitle}>
+                  Hệ thống xác thực và quản lý tài liệu trên blockchain Rootstock. 
+                  Đảm bảo tính minh bạch, bảo mật và không thể giả mạo.
+                </p>
+                
+                {!account && (
+                  <div style={styles.heroActions}>
+                    <button onClick={connectWallet} style={styles.heroButton}>
+                      Bắt đầu ngay
+                    </button>
+                    <button 
+                      onClick={() => setCurrentPage('features')}
+                      style={styles.secondaryHeroButton}
+                    >
+                      Tìm hiểu thêm
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div style={styles.heroVisual}>
+                <div style={styles.visualCard}>
+                  <div style={styles.visualIcon}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M16 13H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M16 17H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M10 9H9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <h3>Đăng ký tài liệu</h3>
+                  <p>Lưu trữ an toàn trên blockchain</p>
+                </div>
+                
+                <div style={styles.visualCard}>
+                  <div style={styles.visualIcon}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <h3>Xác minh nhanh chóng</h3>
+                  <p>Kiểm tra tính hợp lệ tức thì</p>
+                </div>
+              </div>
+            </div>
+
+            {/* App Interface - Chỉ hiển thị khi đã kết nối */}
+            {account && (
+              <div style={styles.appSection}>
+                <div style={styles.appCard}>
+                  {/* Network Info */}
+                  <div style={styles.networkInfo}>
+                    <div style={styles.networkBadge}>
+                      <span style={styles.networkDot}></span>
+                      Rootstock Testnet
+                    </div>
+                    <div style={styles.contractInfo}>
+                      Contract: {CONTRACT_ADDRESS.substring(0, 6)}...{CONTRACT_ADDRESS.substring(CONTRACT_ADDRESS.length - 4)}
+                    </div>
+                  </div>
+
+                  {/* Balance Stats */}
+                  {userBalance > 0 && (
+                    <div style={styles.balanceStats}>
+                      <div style={styles.statItem}>
+                        <div style={styles.statValue}>{canRegister}</div>
+                        <div style={styles.statLabel}>Có thể đăng ký</div>
+                      </div>
+                      <div style={styles.statItem}>
+                        <div style={styles.statValue}>{canVerify}</div>
+                        <div style={styles.statLabel}>Có thể xác minh</div>
+                      </div>
+                      <div style={styles.statItem}>
+                        <div style={styles.statValue}>{transactionHistory.length}</div>
+                        <div style={styles.statLabel}>Giao dịch</div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Navigation Tabs */}
+                  <div style={styles.tabContainer}>
+                    <button 
+                      style={activeTab === 'register' ? styles.activeTab : styles.tab}
+                      onClick={() => setActiveTab('register')}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
+                        <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M16 13H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M16 17H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M10 9H9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Đăng ký tài liệu
+                    </button>
+                    <button 
+                      style={activeTab === 'verify' ? styles.activeTab : styles.tab}
+                      onClick={() => setActiveTab('verify')}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
+                        <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Xác minh tài liệu
+                    </button>
+                    <button 
+                      style={activeTab === 'history' ? styles.activeTab : styles.tab}
+                      onClick={() => setActiveTab('history')}
+                    >
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
+                        <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                      Lịch sử giao dịch
+                    </button>
+                  </div>
+
+                  {/* Form Content */}
+                  <div style={styles.formContent}>
+                    {activeTab === 'register' && (
+                      <RegisterTab 
+                        documentType={documentType}
+                        setDocumentType={setDocumentType}
+                        handleFileUpload={handleFileUpload}
+                        fileName={fileName}
+                        documentHash={documentHash}
+                        registerDocument={registerDocument}
+                        loading={loading}
+                        userBalance={userBalance}
+                        MINIMUM_BALANCE={MINIMUM_BALANCE}
+                        getTestRBTC={getTestRBTC}
+                      />
+                    )}
+
+                    {activeTab === 'verify' && (
+                      <VerifyTab 
+                        documentHash={documentHash}
+                        setDocumentHash={setDocumentHash}
+                        verifyDocument={verifyDocument}
+                        loading={loading}
+                        verificationResult={verificationResult}
+                      />
+                    )}
+
+                    {activeTab === 'history' && (
+                      <HistoryTab 
+                        transactionHistory={transactionHistory}
+                        formatTime={formatTime}
+                        viewTransactionDetails={viewTransactionDetails}
+                        openInExplorer={openInExplorer}
+                      />
+                    )}
+                  </div>
+
+                  {/* Status Section */}
+                  <div style={styles.statusSection}>
+                    <div style={styles.statusIndicator}>
+                      <div style={styles.statusDot}></div>
+                      {status}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )
+    }
+  }
 
   return (
     <div style={styles.container}>
       {/* Header */}
       <header style={styles.header}>
         <div style={styles.headerLeft}>
-          <div style={styles.logo}>
+          <div style={styles.logo} onClick={() => setCurrentPage('home')}>
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -338,9 +553,24 @@ export default function DocumentVerification() {
             <span style={styles.logoText}>DocVerify</span>
           </div>
           <nav style={styles.nav}>
-            <a href="#features" style={styles.navLink}>Tính năng</a>
-            <a href="#about" style={styles.navLink}>Giới thiệu</a>
-            <a href="#contact" style={styles.navLink}>Liên hệ</a>
+            <button 
+              onClick={() => setCurrentPage('features')}
+              style={currentPage === 'features' ? styles.activeNavLink : styles.navLink}
+            >
+              Tính năng
+            </button>
+            <button 
+              onClick={() => setCurrentPage('about')}
+              style={currentPage === 'about' ? styles.activeNavLink : styles.navLink}
+            >
+              Giới thiệu
+            </button>
+            <button 
+              onClick={() => setCurrentPage('contact')}
+              style={currentPage === 'contact' ? styles.activeNavLink : styles.navLink}
+            >
+              Liên hệ
+            </button>
           </nav>
         </div>
         
@@ -372,355 +602,7 @@ export default function DocumentVerification() {
 
       {/* Main Content */}
       <main style={styles.main}>
-        <div style={styles.heroSection}>
-          <div style={styles.heroContent}>
-            <h1 style={styles.heroTitle}>Xác thực giấy tờ điện tử</h1>
-            <p style={styles.heroSubtitle}>
-              Hệ thống xác thực và quản lý tài liệu trên blockchain Rootstock. 
-              Đảm bảo tính minh bạch, bảo mật và không thể giả mạo.
-            </p>
-            
-            {!account && (
-              <div style={styles.heroActions}>
-                <button onClick={connectWallet} style={styles.heroButton}>
-                  Bắt đầu ngay
-                </button>
-                <button style={styles.secondaryHeroButton}>
-                  Tìm hiểu thêm
-                </button>
-              </div>
-            )}
-          </div>
-          
-          <div style={styles.heroVisual}>
-            <div style={styles.visualCard}>
-              <div style={styles.visualIcon}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M16 13H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M16 17H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M10 9H9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <h3>Đăng ký tài liệu</h3>
-              <p>Lưu trữ an toàn trên blockchain</p>
-            </div>
-            
-            <div style={styles.visualCard}>
-              <div style={styles.visualIcon}>
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <h3>Xác minh nhanh chóng</h3>
-              <p>Kiểm tra tính hợp lệ tức thì</p>
-            </div>
-          </div>
-        </div>
-
-        {/* App Interface - Chỉ hiển thị khi đã kết nối */}
-        {account && (
-          <div style={styles.appSection}>
-            <div style={styles.appCard}>
-              {/* Network Info */}
-              <div style={styles.networkInfo}>
-                <div style={styles.networkBadge}>
-                  <span style={styles.networkDot}></span>
-                  Rootstock Testnet
-                </div>
-                <div style={styles.contractInfo}>
-                  Contract: {CONTRACT_ADDRESS.substring(0, 6)}...{CONTRACT_ADDRESS.substring(CONTRACT_ADDRESS.length - 4)}
-                </div>
-              </div>
-
-              {/* Balance Stats */}
-              {userBalance > 0 && (
-                <div style={styles.balanceStats}>
-                  <div style={styles.statItem}>
-                    <div style={styles.statValue}>{canRegister}</div>
-                    <div style={styles.statLabel}>Có thể đăng ký</div>
-                  </div>
-                  <div style={styles.statItem}>
-                    <div style={styles.statValue}>{canVerify}</div>
-                    <div style={styles.statLabel}>Có thể xác minh</div>
-                  </div>
-                  <div style={styles.statItem}>
-                    <div style={styles.statValue}>{transactionHistory.length}</div>
-                    <div style={styles.statLabel}>Giao dịch</div>
-                  </div>
-                </div>
-              )}
-
-              {/* Navigation Tabs */}
-              <div style={styles.tabContainer}>
-                <button 
-                  style={activeTab === 'register' ? styles.activeTab : styles.tab}
-                  onClick={() => setActiveTab('register')}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
-                    <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M16 13H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M16 17H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M10 9H9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Đăng ký tài liệu
-                </button>
-                <button 
-                  style={activeTab === 'verify' ? styles.activeTab : styles.tab}
-                  onClick={() => setActiveTab('verify')}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
-                    <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Xác minh tài liệu
-                </button>
-                <button 
-                  style={activeTab === 'history' ? styles.activeTab : styles.tab}
-                  onClick={() => setActiveTab('history')}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.tabIcon}>
-                    <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  Lịch sử giao dịch
-                </button>
-              </div>
-
-              {/* Form Content */}
-              <div style={styles.formContent}>
-                {activeTab === 'register' && (
-                  <div style={styles.formSection}>
-                    <h3 style={styles.formTitle}>Đăng ký tài liệu mới</h3>
-                    
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Loại tài liệu</label>
-                      <select 
-                        value={documentType}
-                        onChange={(e) => setDocumentType(e.target.value)}
-                        style={styles.select}
-                      >
-                        <option value="CMND">CMND/CCCD</option>
-                        <option value="BANG_LAI">Bằng lái xe</option>
-                        <option value="HO_KHAU">Sổ hộ khẩu</option>
-                        <option value="BANG_CAP">Bằng cấp</option>
-                        <option value="HOP_DONG">Hợp đồng</option>
-                      </select>
-                    </div>
-
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Tải lên tài liệu</label>
-                      <div style={styles.fileUploadArea}>
-                        <input 
-                          type="file" 
-                          onChange={handleFileUpload}
-                          style={styles.fileInput}
-                          id="file-upload"
-                          disabled={loading}
-                        />
-                        <label htmlFor="file-upload" style={styles.fileUploadLabel}>
-                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.uploadIcon}>
-                            <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          <span>Chọn tệp để tải lên</span>
-                          <p style={styles.fileUploadHint}>Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 10MB)</p>
-                        </label>
-                      </div>
-                      {fileName && (
-                        <div style={styles.fileNameDisplay}>
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M13 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L13 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M13 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                          {fileName}
-                        </div>
-                      )}
-                    </div>
-
-                    {documentHash && (
-                      <div style={styles.hashSection}>
-                        <label style={styles.label}>Mã hash của tài liệu</label>
-                        <div style={styles.hashDisplay}>
-                          {documentHash}
-                        </div>
-                      </div>
-                    )}
-
-                    <button 
-                      onClick={registerDocument}
-                      disabled={loading || !documentHash || userBalance < MINIMUM_BALANCE}
-                      style={{
-                        ...styles.primaryButton,
-                        ...((loading || !documentHash || userBalance < MINIMUM_BALANCE) && styles.disabledButton)
-                      }}
-                    >
-                      {loading ? (
-                        <>
-                          <div style={styles.spinner}></div>
-                          Đang xử lý...
-                        </>
-                      ) : (
-                        'Đăng ký tài liệu'
-                      )}
-                    </button>
-
-                    {userBalance < MINIMUM_BALANCE && (
-                      <div style={styles.warningBox}>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path d="M12 9V11M12 15H12.01M5.07183 19H18.9282C20.4678 19 21.4301 17.3333 20.6603 16L13.7321 4C12.9623 2.66667 11.0377 2.66667 10.2679 4L3.33975 16C2.56995 17.3333 3.53223 19 5.07183 19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        <div>
-                          <strong>Cần ít nhất {MINIMUM_BALANCE} tRBTC</strong>
-                          <p>Số dư hiện tại: {userBalance.toFixed(6)} tRBTC</p>
-                          <button onClick={getTestRBTC} style={styles.faucetButton}>
-                            Nhận Test Token
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'verify' && (
-                  <div style={styles.formSection}>
-                    <h3 style={styles.formTitle}>Xác minh tài liệu</h3>
-                    
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Mã hash tài liệu</label>
-                      <input 
-                        type="text"
-                        value={documentHash}
-                        onChange={(e) => setDocumentHash(e.target.value)}
-                        style={styles.input}
-                        placeholder="Dán mã hash của tài liệu cần xác minh..."
-                      />
-                    </div>
-
-                    <button 
-                      onClick={verifyDocument}
-                      disabled={loading || !documentHash}
-                      style={{
-                        ...styles.secondaryButton,
-                        ...((loading || !documentHash) && styles.disabledButton)
-                      }}
-                    >
-                      {loading ? (
-                        <>
-                          <div style={styles.spinner}></div>
-                          Đang xác minh...
-                        </>
-                      ) : (
-                        'Xác minh tài liệu'
-                      )}
-                    </button>
-
-                    {verificationResult && (
-                      <div style={{
-                        ...styles.resultBox,
-                        ...(verificationResult.includes('HỢP LỆ') ? styles.validResult : styles.invalidResult)
-                      }}>
-                        <div style={styles.resultHeader}>
-                          {verificationResult.includes('HỢP LỆ') ? (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.709 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                              <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          ) : (
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
-                          <h4>{verificationResult}</h4>
-                        </div>
-                        <p style={styles.resultDescription}>
-                          {verificationResult.includes('HỢP LỆ') 
-                            ? 'Tài liệu này đã được đăng ký trên blockchain và có giá trị pháp lý.' 
-                            : 'Tài liệu này không tồn tại trong hệ thống hoặc không hợp lệ.'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {activeTab === 'history' && (
-                  <div style={styles.formSection}>
-                    <h3 style={styles.formTitle}>Lịch sử giao dịch</h3>
-                    
-                    {transactionHistory.length === 0 ? (
-                      <div style={styles.emptyState}>
-                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.emptyIcon}>
-                          <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                          <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        <h4>Chưa có giao dịch nào</h4>
-                        <p>Thực hiện đăng ký tài liệu đầu tiên để xem lịch sử giao dịch</p>
-                      </div>
-                    ) : (
-                      <div style={styles.transactionList}>
-                        {transactionHistory.map((tx, index) => (
-                          <div key={index} style={styles.transactionItem}>
-                            <div style={styles.transactionHeader}>
-                              <div style={styles.transactionType}>
-                                <span style={tx.type === 'register' ? styles.typeRegister : styles.typeVerify}>
-                                  {tx.type === 'register' ? '📝 Đăng ký' : '🔍 Xác minh'}
-                                </span>
-                              </div>
-                              <div style={styles.transactionTime}>
-                                {formatTime(tx.timestamp)}
-                              </div>
-                            </div>
-                            
-                            <div style={styles.transactionBody}>
-                              <div style={styles.transactionHash}>
-                                Hash: {tx.hash.substring(0, 10)}...{tx.hash.substring(tx.hash.length - 8)}
-                              </div>
-                              <div style={styles.documentHash}>
-                                Document: {tx.documentHash.substring(0, 12)}...{tx.documentHash.substring(tx.documentHash.length - 8)}
-                              </div>
-                            </div>
-                            
-                            <div style={styles.transactionFooter}>
-                              <div style={tx.status === 'success' ? styles.statusSuccess : styles.statusFailed}>
-                                {tx.status === 'success' ? '✅ Thành công' : '❌ Thất bại'}
-                              </div>
-                              <div style={styles.transactionActions}>
-                                <button 
-                                  onClick={() => viewTransactionDetails(tx.hash)}
-                                  style={styles.detailButton}
-                                >
-                                  Chi tiết
-                                </button>
-                                <button 
-                                  onClick={() => openInExplorer(tx.hash)}
-                                  style={styles.explorerButton}
-                                >
-                                  Explorer
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Status Section */}
-              <div style={styles.statusSection}>
-                <div style={styles.statusIndicator}>
-                  <div style={styles.statusDot}></div>
-                  {status}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderPage()}
       </main>
 
       {/* Footer */}
@@ -735,16 +617,28 @@ export default function DocumentVerification() {
           
           <div style={styles.footerSection}>
             <h4 style={styles.footerTitle}>Liên kết</h4>
-            <a href="#privacy" style={styles.footerLink}>Chính sách bảo mật</a>
-            <a href="#terms" style={styles.footerLink}>Điều khoản sử dụng</a>
-            <a href="#help" style={styles.footerLink}>Trợ giúp</a>
+            <button onClick={() => setCurrentPage('features')} style={styles.footerLink}>
+              Tính năng
+            </button>
+            <button onClick={() => setCurrentPage('about')} style={styles.footerLink}>
+              Giới thiệu
+            </button>
+            <button onClick={() => setCurrentPage('contact')} style={styles.footerLink}>
+              Liên hệ
+            </button>
           </div>
           
           <div style={styles.footerSection}>
             <h4 style={styles.footerTitle}>Công nghệ</h4>
-            <a href="#rootstock" style={styles.footerLink}>Rootstock</a>
-            <a href="#bitcoin" style={styles.footerLink}>Bitcoin</a>
-            <a href="#smart-contract" style={styles.footerLink}>Smart Contract</a>
+            <a href="https://rootstock.io" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>
+              Rootstock
+            </a>
+            <a href="https://bitcoin.org" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>
+              Bitcoin
+            </a>
+            <a href="https://explorer.testnet.rootstock.io" target="_blank" rel="noopener noreferrer" style={styles.footerLink}>
+              Smart Contract
+            </a>
           </div>
         </div>
         
@@ -755,81 +649,620 @@ export default function DocumentVerification() {
 
       {/* Modal chi tiết transaction */}
       {showTransactionModal && (
-        <div style={styles.modalOverlay}>
-          <div style={styles.modal}>
-            <div style={styles.modalHeader}>
-              <h3 style={styles.modalTitle}>Chi tiết giao dịch</h3>
-              <button 
-                onClick={() => setShowTransactionModal(false)}
-                style={styles.closeButton}
-              >
-                ×
-              </button>
-            </div>
-            
-            {selectedTransaction ? (
-              <div style={styles.modalContent}>
-                <div style={styles.detailGrid}>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Transaction Hash:</span>
-                    <span style={styles.detailValue}>{selectedTransaction.hash}</span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Trạng thái:</span>
-                    <span style={selectedTransaction.status === 'Thành công' ? styles.statusSuccess : styles.statusFailed}>
-                      {selectedTransaction.status}
-                    </span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Block:</span>
-                    <span style={styles.detailValue}>{selectedTransaction.blockNumber}</span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Thời gian:</span>
-                    <span style={styles.detailValue}>{formatTime(selectedTransaction.timestamp)}</span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Gas Used:</span>
-                    <span style={styles.detailValue}>{selectedTransaction.gasUsed}</span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Gas Price:</span>
-                    <span style={styles.detailValue}>{selectedTransaction.gasPrice} Gwei</span>
-                  </div>
-                  <div style={styles.detailRow}>
-                    <span style={styles.detailLabel}>Xác nhận:</span>
-                    <span style={styles.detailValue}>{selectedTransaction.confirmations}</span>
-                  </div>
-                </div>
-                
-                <div style={styles.modalActions}>
-                  <button 
-                    onClick={() => openInExplorer(selectedTransaction.hash)}
-                    style={styles.primaryButton}
-                  >
-                    Xem trên Explorer
-                  </button>
-                  <button 
-                    onClick={() => setShowTransactionModal(false)}
-                    style={styles.secondaryButton}
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={styles.loadingModal}>
-                <div style={styles.spinner}></div>
-                <p>Đang tải chi tiết...</p>
-              </div>
-            )}
-          </div>
-        </div>
+        <TransactionModal 
+          selectedTransaction={selectedTransaction}
+          setShowTransactionModal={setShowTransactionModal}
+          formatTime={formatTime}
+          openInExplorer={openInExplorer}
+        />
       )}
     </div>
   )
 }
 
+// Component cho trang Tính năng
+const FeaturesPage = () => (
+  <div style={styles.pageContainer}>
+    <div style={styles.pageHeader}>
+      <h1 style={styles.pageTitle}>Tính năng nổi bật</h1>
+      <p style={styles.pageSubtitle}>Khám phá những tính năng đột phá của hệ thống xác thực tài liệu DocVerify</p>
+    </div>
+
+    <div style={styles.featuresGrid}>
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 15V17M12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12C21 16.9706 16.9706 21 12 21Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 7V13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Bảo mật tuyệt đối</h3>
+        <p>Tài liệu được mã hóa và lưu trữ an toàn trên blockchain Rootstock, đảm bảo không thể bị giả mạo hoặc thay đổi.</p>
+      </div>
+
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M9 12L11 14L15 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M21 12C21 13.1819 20.7672 14.3522 20.3149 15.4442C19.8626 16.5361 19.1997 17.5282 18.364 18.364C17.5282 19.1997 16.5361 19.8626 15.4442 20.3149C14.3522 20.7672 13.1819 21 12 21C10.8181 21 9.64778 20.7672 8.55585 20.3149C7.46392 19.8626 6.47177 19.1997 5.63604 18.364C4.80031 17.5282 4.13738 16.5361 3.68508 15.4442C3.23279 14.3522 3 13.1819 3 12C3 9.61305 3.94821 7.32387 5.63604 5.63604C7.32387 3.94821 9.61305 3 12 3C14.3869 3 16.6761 3.94821 18.364 5.63604C20.0518 7.32387 21 9.61305 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Xác minh tức thì</h3>
+        <p>Kiểm tra tính hợp lệ của tài liệu chỉ trong vài giây với công nghệ blockchain tiên tiến.</p>
+      </div>
+
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M14 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 13H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M16 17H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M10 9H9H8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Đa dạng tài liệu</h3>
+        <p>Hỗ trợ nhiều loại tài liệu: CMND/CCCD, bằng lái xe, sổ hộ khẩu, bằng cấp, hợp đồng và nhiều hơn nữa.</p>
+      </div>
+
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 20C16.4183 20 20 16.4183 20 12C20 7.58172 16.4183 4 12 4C7.58172 4 4 7.58172 4 12C4 16.4183 7.58172 20 12 20Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Tiết kiệm thời gian</h3>
+        <p>Quy trình đơn giản, nhanh chóng, giảm thiểu thời gian xác thực tài liệu truyền thống.</p>
+      </div>
+
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 3H8C9.06087 3 10.0783 3.42143 10.8284 4.17157C11.5786 4.92172 12 5.93913 12 7V21C12 20.2044 11.6839 19.4413 11.1213 18.8787C10.5587 18.3161 9.79565 18 9 18H2V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M22 3H16C14.9391 3 13.9217 3.42143 13.1716 4.17157C12.4214 4.92172 12 5.93913 12 7V21C12 20.2044 12.3161 19.4413 12.8787 18.8787C13.4413 18.3161 14.2044 18 15 18H22V3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Minh bạch hoàn toàn</h3>
+        <p>Mọi giao dịch đều được ghi lại công khai trên blockchain, đảm bảo tính minh bạch và có thể kiểm chứng.</p>
+      </div>
+
+      <div style={styles.featureCard}>
+        <div style={styles.featureIcon}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 16V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <h3>Hỗ trợ 24/7</h3>
+        <p>Đội ngũ hỗ trợ kỹ thuật luôn sẵn sàng giải đáp mọi thắc mắc và hỗ trợ người dùng.</p>
+      </div>
+    </div>
+  </div>
+)
+
+// Component cho trang Giới thiệu
+const AboutPage = () => (
+  <div style={styles.pageContainer}>
+    <div style={styles.pageHeader}>
+      <h1 style={styles.pageTitle}>Về DocVerify</h1>
+      <p style={styles.pageSubtitle}>Giải pháp xác thực tài liệu điện tử hàng đầu trên nền tảng blockchain</p>
+    </div>
+
+    <div style={styles.aboutContent}>
+      <div style={styles.aboutSection}>
+        <h2 style={styles.sectionTitle}>Sứ mệnh của chúng tôi</h2>
+        <p style={styles.sectionText}>
+          DocVerify ra đời với sứ mệnh cách mạng hóa quy trình xác thực tài liệu truyền thống. 
+          Chúng tôi tin rằng công nghệ blockchain sẽ mang lại sự minh bạch, bảo mật và hiệu quả 
+          cho việc quản lý và xác thực các tài liệu quan trọng.
+        </p>
+      </div>
+
+      <div style={styles.aboutSection}>
+        <h2 style={styles.sectionTitle}>Công nghệ tiên tiến</h2>
+        <div style={styles.techGrid}>
+          <div style={styles.techItem}>
+            <h4>🔗 Rootstock Blockchain</h4>
+            <p>Leveraging the security of Bitcoin with smart contract capabilities</p>
+          </div>
+          <div style={styles.techItem}>
+            <h4>🔐 SHA-256 Encryption</h4>
+            <p>Military-grade encryption for document security</p>
+          </div>
+          <div style={styles.techItem}>
+            <h4>⚡ Smart Contracts</h4>
+            <p>Automated verification processes with zero downtime</p>
+          </div>
+          <div style={styles.techItem}>
+            <h4>🌐 Web3 Integration</h4>
+            <p>Seamless integration with modern web applications</p>
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.aboutSection}>
+        <h2 style={styles.sectionTitle}>Đội ngũ phát triển</h2>
+        <p style={styles.sectionText}>
+          Đội ngũ của chúng tôi bao gồm các chuyên gia hàng đầu trong lĩnh vực blockchain, 
+          bảo mật và phát triển phần mềm. Với kinh nghiệm nhiều năm trong ngành, chúng tôi 
+          cam kết mang đến giải pháp tốt nhất cho khách hàng.
+        </p>
+      </div>
+
+      <div style={styles.statsSection}>
+        <div style={styles.statBox}>
+          <div style={styles.statNumber}>10,000+</div>
+          <div style={styles.statLabel}>Tài liệu đã xác thực</div>
+        </div>
+        <div style={styles.statBox}>
+          <div style={styles.statNumber}>99.9%</div>
+          <div style={styles.statLabel}>Thời gian hoạt động</div>
+        </div>
+        <div style={styles.statBox}>
+          <div style={styles.statNumber}>2,500+</div>
+          <div style={styles.statLabel}>Người dùng tin tưởng</div>
+        </div>
+        <div style={styles.statBox}>
+          <div style={styles.statNumber}>0</div>
+          <div style={styles.statLabel}>Sự cố bảo mật</div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
+// Component cho trang Liên hệ
+const ContactPage = ({ contactForm, onChange, onSubmit }) => (
+  <div style={styles.pageContainer}>
+    <div style={styles.pageHeader}>
+      <h1 style={styles.pageTitle}>Liên hệ với chúng tôi</h1>
+      <p style={styles.pageSubtitle}>Chúng tôi luôn sẵn sàng lắng nghe và hỗ trợ bạn</p>
+    </div>
+
+    <div style={styles.contactContent}>
+      <div style={styles.contactForm}>
+        <h3 style={styles.formTitle}>Gửi tin nhắn</h3>
+        <form onSubmit={onSubmit} style={styles.form}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Họ và tên *</label>
+            <input
+              type="text"
+              name="name"
+              value={contactForm.name}
+              onChange={onChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Email *</label>
+            <input
+              type="email"
+              name="email"
+              value={contactForm.email}
+              onChange={onChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Tiêu đề *</label>
+            <input
+              type="text"
+              name="subject"
+              value={contactForm.subject}
+              onChange={onChange}
+              style={styles.input}
+              required
+            />
+          </div>
+
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Nội dung *</label>
+            <textarea
+              name="message"
+              value={contactForm.message}
+              onChange={onChange}
+              style={{...styles.input, ...styles.textarea}}
+              rows="5"
+              required
+            />
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            Gửi tin nhắn
+          </button>
+        </form>
+      </div>
+
+      <div style={styles.contactInfo}>
+        <h3 style={styles.infoTitle}>Thông tin liên hệ</h3>
+        
+        <div style={styles.contactItem}>
+          <div style={styles.contactIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M21 10C21 17 12 23 12 23C12 23 3 17 3 10C3 7.61305 3.94821 5.32387 5.63604 3.63604C7.32387 1.94821 9.61305 1 12 1C14.3869 1 16.6761 1.94821 18.364 3.63604C20.0518 5.32387 21 7.61305 21 10Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 13C13.6569 13 15 11.6569 15 10C15 8.34315 13.6569 7 12 7C10.3431 7 9 8.34315 9 10C9 11.6569 10.3431 13 12 13Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <h4>Địa chỉ</h4>
+            <p>123 Đường ABC, Quận 1, TP. Hồ Chí Minh</p>
+          </div>
+        </div>
+
+        <div style={styles.contactItem}>
+          <div style={styles.contactIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 16.92V19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V16.92C2 16.37 2.38 15.89 2.91 15.78L5.82 15.18C6.34 15.07 6.86 15.31 7.13 15.77L9.21 19.17C9.54 19.72 10.17 20.06 10.86 20.06H13.14C13.83 20.06 14.46 19.72 14.79 19.17L16.87 15.77C17.14 15.31 17.66 15.07 18.18 15.18L21.09 15.78C21.62 15.89 22 16.37 22 16.92Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 11C14.2091 11 16 9.20914 16 7C16 4.79086 14.2091 3 12 3C9.79086 3 8 4.79086 8 7C8 9.20914 9.79086 11 12 11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <h4>Email</h4>
+            <p>support@docverify.com</p>
+          </div>
+        </div>
+
+        <div style={styles.contactItem}>
+          <div style={styles.contactIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 16.92V19C22 19.5304 21.7893 20.0391 21.4142 20.4142C21.0391 20.7893 20.5304 21 20 21H4C3.46957 21 2.96086 20.7893 2.58579 20.4142C2.21071 20.0391 2 19.5304 2 19V16.92C2 16.37 2.38 15.89 2.91 15.78L5.82 15.18C6.34 15.07 6.86 15.31 7.13 15.77L9.21 19.17C9.54 19.72 10.17 20.06 10.86 20.06H13.14C13.83 20.06 14.46 19.72 14.79 19.17L16.87 15.77C17.14 15.31 17.66 15.07 18.18 15.18L21.09 15.78C21.62 15.89 22 16.37 22 16.92Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M15 7C15 8.65685 13.6569 10 12 10C10.3431 10 9 8.65685 9 7C9 5.34315 10.3431 4 12 4C13.6569 4 15 5.34315 15 7Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <h4>Điện thoại</h4>
+            <p>+84 28 1234 5678</p>
+          </div>
+        </div>
+
+        <div style={styles.contactItem}>
+          <div style={styles.contactIcon}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 16V12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M12 8H12.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div>
+            <h4>Thời gian làm việc</h4>
+            <p>Thứ 2 - Thứ 6: 8:00 - 17:00</p>
+            <p>Thứ 7: 8:00 - 12:00</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
+// Component cho Tab Đăng ký
+const RegisterTab = ({
+  documentType,
+  setDocumentType,
+  handleFileUpload,
+  fileName,
+  documentHash,
+  registerDocument,
+  loading,
+  userBalance,
+  MINIMUM_BALANCE,
+  getTestRBTC
+}) => (
+  <div style={styles.formSection}>
+    <h3 style={styles.formTitle}>Đăng ký tài liệu mới</h3>
+    
+    <div style={styles.formGroup}>
+      <label style={styles.label}>Loại tài liệu</label>
+      <select 
+        value={documentType}
+        onChange={(e) => setDocumentType(e.target.value)}
+        style={styles.select}
+      >
+        <option value="CMND">CMND/CCCD</option>
+        <option value="BANG_LAI">Bằng lái xe</option>
+        <option value="HO_KHAU">Sổ hộ khẩu</option>
+        <option value="BANG_CAP">Bằng cấp</option>
+        <option value="HOP_DONG">Hợp đồng</option>
+      </select>
+    </div>
+
+    <div style={styles.formGroup}>
+      <label style={styles.label}>Tải lên tài liệu</label>
+      <div style={styles.fileUploadArea}>
+        <input 
+          type="file" 
+          onChange={handleFileUpload}
+          style={styles.fileInput}
+          id="file-upload"
+          disabled={loading}
+        />
+        <label htmlFor="file-upload" style={styles.fileUploadLabel}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.uploadIcon}>
+            <path d="M21 15V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M17 8L12 3L7 8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M12 3V15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span>Chọn tệp để tải lên</span>
+          <p style={styles.fileUploadHint}>Hỗ trợ: PDF, DOC, DOCX, JPG, PNG (Tối đa 10MB)</p>
+        </label>
+      </div>
+      {fileName && (
+        <div style={styles.fileNameDisplay}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L13 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            <path d="M13 2V8H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          {fileName}
+        </div>
+      )}
+    </div>
+
+    {documentHash && (
+      <div style={styles.hashSection}>
+        <label style={styles.label}>Mã hash của tài liệu</label>
+        <div style={styles.hashDisplay}>
+          {documentHash}
+        </div>
+      </div>
+    )}
+
+    <button 
+      onClick={registerDocument}
+      disabled={loading || !documentHash || userBalance < MINIMUM_BALANCE}
+      style={{
+        ...styles.primaryButton,
+        ...((loading || !documentHash || userBalance < MINIMUM_BALANCE) && styles.disabledButton)
+      }}
+    >
+      {loading ? (
+        <>
+          <div style={styles.spinner}></div>
+          Đang xử lý...
+        </>
+      ) : (
+        'Đăng ký tài liệu'
+      )}
+    </button>
+
+    {userBalance < MINIMUM_BALANCE && (
+      <div style={styles.warningBox}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 9V11M12 15H12.01M5.07183 19H18.9282C20.4678 19 21.4301 17.3333 20.6603 16L13.7321 4C12.9623 2.66667 11.0377 2.66667 10.2679 4L3.33975 16C2.56995 17.3333 3.53223 19 5.07183 19Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <div>
+          <strong>Cần ít nhất {MINIMUM_BALANCE} tRBTC</strong>
+          <p>Số dư hiện tại: {userBalance.toFixed(6)} tRBTC</p>
+          <button onClick={getTestRBTC} style={styles.faucetButton}>
+            Nhận Test Token
+          </button>
+        </div>
+      </div>
+    )}
+  </div>
+)
+
+// Component cho Tab Xác minh
+const VerifyTab = ({
+  documentHash,
+  setDocumentHash,
+  verifyDocument,
+  loading,
+  verificationResult
+}) => (
+  <div style={styles.formSection}>
+    <h3 style={styles.formTitle}>Xác minh tài liệu</h3>
+    
+    <div style={styles.formGroup}>
+      <label style={styles.label}>Mã hash tài liệu</label>
+      <input 
+        type="text"
+        value={documentHash}
+        onChange={(e) => setDocumentHash(e.target.value)}
+        style={styles.input}
+        placeholder="Dán mã hash của tài liệu cần xác minh..."
+      />
+    </div>
+
+    <button 
+      onClick={verifyDocument}
+      disabled={loading || !documentHash}
+      style={{
+        ...styles.secondaryButton,
+        ...((loading || !documentHash) && styles.disabledButton)
+      }}
+    >
+      {loading ? (
+        <>
+          <div style={styles.spinner}></div>
+          Đang xác minh...
+        </>
+      ) : (
+        'Xác minh tài liệu'
+      )}
+    </button>
+
+    {verificationResult && (
+      <div style={{
+        ...styles.resultBox,
+        ...(verificationResult.includes('HỢP LỆ') ? styles.validResult : styles.invalidResult)
+      }}>
+        <div style={styles.resultHeader}>
+          {verificationResult.includes('HỢP LỆ') ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M22 11.08V12C21.9988 14.1564 21.3005 16.2547 20.0093 17.9818C18.7182 19.709 16.9033 20.9725 14.8354 21.5839C12.7674 22.1953 10.5573 22.1219 8.53447 21.3746C6.51168 20.6273 4.78465 19.2461 3.61096 17.4371C2.43727 15.628 1.87979 13.4881 2.02168 11.3363C2.16356 9.18455 2.99721 7.13631 4.39828 5.49706C5.79935 3.85781 7.69279 2.71537 9.79619 2.24013C11.8996 1.7649 14.1003 1.98232 16.07 2.85999" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M22 4L12 14.01L9 11.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+          <h4>{verificationResult}</h4>
+        </div>
+        <p style={styles.resultDescription}>
+          {verificationResult.includes('HỢP LỆ') 
+            ? 'Tài liệu này đã được đăng ký trên blockchain và có giá trị pháp lý.' 
+            : 'Tài liệu này không tồn tại trong hệ thống hoặc không hợp lệ.'}
+        </p>
+      </div>
+    )}
+  </div>
+)
+
+// Component cho Tab Lịch sử
+const HistoryTab = ({
+  transactionHistory,
+  formatTime,
+  viewTransactionDetails,
+  openInExplorer
+}) => (
+  <div style={styles.formSection}>
+    <h3 style={styles.formTitle}>Lịch sử giao dịch</h3>
+    
+    {transactionHistory.length === 0 ? (
+      <div style={styles.emptyState}>
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={styles.emptyIcon}>
+          <path d="M12 8V12L15 15" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        <h4>Chưa có giao dịch nào</h4>
+        <p>Thực hiện đăng ký tài liệu đầu tiên để xem lịch sử giao dịch</p>
+      </div>
+    ) : (
+      <div style={styles.transactionList}>
+        {transactionHistory.map((tx, index) => (
+          <div key={index} style={styles.transactionItem}>
+            <div style={styles.transactionHeader}>
+              <div style={styles.transactionType}>
+                <span style={tx.type === 'register' ? styles.typeRegister : styles.typeVerify}>
+                  {tx.type === 'register' ? '📝 Đăng ký' : '🔍 Xác minh'}
+                </span>
+              </div>
+              <div style={styles.transactionTime}>
+                {formatTime(tx.timestamp)}
+              </div>
+            </div>
+            
+            <div style={styles.transactionBody}>
+              <div style={styles.transactionHash}>
+                Hash: {tx.hash.substring(0, 10)}...{tx.hash.substring(tx.hash.length - 8)}
+              </div>
+              <div style={styles.documentHash}>
+                Document: {tx.documentHash.substring(0, 12)}...{tx.documentHash.substring(tx.documentHash.length - 8)}
+              </div>
+            </div>
+            
+            <div style={styles.transactionFooter}>
+              <div style={tx.status === 'success' ? styles.statusSuccess : styles.statusFailed}>
+                {tx.status === 'success' ? '✅ Thành công' : '❌ Thất bại'}
+              </div>
+              <div style={styles.transactionActions}>
+                <button 
+                  onClick={() => viewTransactionDetails(tx.hash)}
+                  style={styles.detailButton}
+                >
+                  Chi tiết
+                </button>
+                <button 
+                  onClick={() => openInExplorer(tx.hash)}
+                  style={styles.explorerButton}
+                >
+                  Explorer
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+)
+
+// Component cho Modal Transaction
+const TransactionModal = ({
+  selectedTransaction,
+  setShowTransactionModal,
+  formatTime,
+  openInExplorer
+}) => (
+  <div style={styles.modalOverlay}>
+    <div style={styles.modal}>
+      <div style={styles.modalHeader}>
+        <h3 style={styles.modalTitle}>Chi tiết giao dịch</h3>
+        <button 
+          onClick={() => setShowTransactionModal(false)}
+          style={styles.closeButton}
+        >
+          ×
+        </button>
+      </div>
+      
+      {selectedTransaction ? (
+        <div style={styles.modalContent}>
+          <div style={styles.detailGrid}>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Transaction Hash:</span>
+              <span style={styles.detailValue}>{selectedTransaction.hash}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Trạng thái:</span>
+              <span style={selectedTransaction.status === 'Thành công' ? styles.statusSuccess : styles.statusFailed}>
+                {selectedTransaction.status}
+              </span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Block:</span>
+              <span style={styles.detailValue}>{selectedTransaction.blockNumber}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Thời gian:</span>
+              <span style={styles.detailValue}>{formatTime(selectedTransaction.timestamp)}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Gas Used:</span>
+              <span style={styles.detailValue}>{selectedTransaction.gasUsed}</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Gas Price:</span>
+              <span style={styles.detailValue}>{selectedTransaction.gasPrice} Gwei</span>
+            </div>
+            <div style={styles.detailRow}>
+              <span style={styles.detailLabel}>Xác nhận:</span>
+              <span style={styles.detailValue}>{selectedTransaction.confirmations}</span>
+            </div>
+          </div>
+          
+          <div style={styles.modalActions}>
+            <button 
+              onClick={() => openInExplorer(selectedTransaction.hash)}
+              style={styles.primaryButton}
+            >
+              Xem trên Explorer
+            </button>
+            <button 
+              onClick={() => setShowTransactionModal(false)}
+              style={styles.secondaryButton}
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div style={styles.loadingModal}>
+          <div style={styles.spinner}></div>
+          <p>Đang tải chi tiết...</p>
+        </div>
+      )}
+    </div>
+  </div>
+)
+
+// Styles hoàn chỉnh
 const styles = {
   container: {
     minHeight: '100vh',
@@ -862,7 +1295,8 @@ const styles = {
     gap: '8px',
     color: '#667eea',
     fontWeight: '700',
-    fontSize: '20px'
+    fontSize: '20px',
+    cursor: 'pointer'
   },
   logoText: {
     background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -875,14 +1309,27 @@ const styles = {
     gap: '24px'
   },
   navLink: {
+    background: 'none',
+    border: 'none',
     color: '#4a5568',
-    textDecoration: 'none',
     fontWeight: '500',
     fontSize: '14px',
-    transition: 'color 0.2s ease',
-    ':hover': {
-      color: '#667eea'
-    }
+    cursor: 'pointer',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    transition: 'all 0.2s ease',
+    textDecoration: 'none'
+  },
+  activeNavLink: {
+    background: 'none',
+    border: 'none',
+    color: '#667eea',
+    fontWeight: '600',
+    fontSize: '14px',
+    cursor: 'pointer',
+    padding: '8px 16px',
+    borderRadius: '6px',
+    transition: 'all 0.2s ease'
   },
   headerRight: {
     display: 'flex',
@@ -901,14 +1348,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)',
-    ':hover': {
-      transform: 'translateY(-1px)',
-      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.4)'
-    }
+    boxShadow: '0 2px 8px rgba(102, 126, 234, 0.3)'
   },
   walletIcon: {
-    // Icon styles
+    width: '20px',
+    height: '20px'
   },
   accountInfo: {
     display: 'flex',
@@ -992,11 +1436,7 @@ const styles = {
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-    ':hover': {
-      transform: 'translateY(-2px)',
-      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
-    }
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
   },
   secondaryHeroButton: {
     background: 'white',
@@ -1007,11 +1447,7 @@ const styles = {
     fontSize: '16px',
     fontWeight: '600',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      background: '#667eea',
-      color: 'white'
-    }
+    transition: 'all 0.2s ease'
   },
   heroVisual: {
     display: 'flex',
@@ -1024,17 +1460,14 @@ const styles = {
     borderRadius: '12px',
     boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
     textAlign: 'center',
-    transition: 'transform 0.2s ease',
-    ':hover': {
-      transform: 'translateY(-5px)'
-    }
+    transition: 'transform 0.2s ease'
   },
   visualIcon: {
     color: '#667eea',
     marginBottom: '16px'
   },
   
-  // App Section Styles (khi đã kết nối)
+  // App Section Styles
   appSection: {
     maxWidth: '800px',
     margin: '0 auto'
@@ -1135,11 +1568,15 @@ const styles = {
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
     transition: 'all 0.2s ease'
   },
+  tabIcon: {
+    width: '20px',
+    height: '20px'
+  },
   formContent: {
     padding: '0 30px 30px 30px'
   },
   formSection: {
-    // Reuse from previous styles
+    marginBottom: '25px'
   },
   formTitle: {
     fontSize: '20px',
@@ -1164,12 +1601,7 @@ const styles = {
     borderRadius: '8px',
     fontSize: '16px',
     backgroundColor: 'white',
-    transition: 'all 0.2s ease',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#667eea',
-      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)'
-    }
+    transition: 'all 0.2s ease'
   },
   input: {
     width: '100%',
@@ -1178,11 +1610,7 @@ const styles = {
     borderRadius: '8px',
     fontSize: '16px',
     transition: 'all 0.2s ease',
-    ':focus': {
-      outline: 'none',
-      borderColor: '#667eea',
-      boxShadow: '0 0 0 3px rgba(102, 126, 234, 0.1)'
-    }
+    boxSizing: 'border-box'
   },
   fileUploadArea: {
     position: 'relative'
@@ -1208,11 +1636,7 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     textAlign: 'center',
-    color: '#718096',
-    ':hover': {
-      borderColor: '#667eea',
-      color: '#667eea'
-    }
+    color: '#718096'
   },
   uploadIcon: {
     marginBottom: '12px',
@@ -1261,11 +1685,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)',
-    ':hover': {
-      transform: 'translateY(-1px)',
-      boxShadow: '0 6px 20px rgba(102, 126, 234, 0.4)'
-    }
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
   },
   secondaryButton: {
     width: '100%',
@@ -1281,18 +1701,11 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
-    ':hover': {
-      background: '#e2e8f0'
-    }
+    gap: '8px'
   },
   disabledButton: {
     opacity: '0.6',
-    cursor: 'not-allowed',
-    ':hover': {
-      transform: 'none',
-      boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
-    }
+    cursor: 'not-allowed'
   },
   spinner: {
     width: '18px',
@@ -1322,9 +1735,7 @@ const styles = {
     fontSize: '14px',
     cursor: 'pointer',
     marginTop: '8px',
-    ':hover': {
-      background: '#5a6fd8'
-    }
+    transition: 'all 0.2s ease'
   },
   resultBox: {
     padding: '20px',
@@ -1368,8 +1779,7 @@ const styles = {
     width: '8px',
     height: '8px',
     borderRadius: '50%',
-    background: '#48bb78',
-    animation: 'pulse 2s infinite'
+    background: '#48bb78'
   },
   
   // Footer Styles
@@ -1408,9 +1818,10 @@ const styles = {
     textDecoration: 'none',
     fontSize: '14px',
     transition: 'color 0.2s ease',
-    ':hover': {
-      color: 'white'
-    }
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    textAlign: 'left'
   },
   footerBottom: {
     borderTop: '1px solid #4a5568',
@@ -1421,7 +1832,7 @@ const styles = {
     fontSize: '14px'
   },
 
-  // Các styles khác giữ nguyên từ code trước
+  // Transaction Styles
   emptyState: {
     textAlign: 'center',
     padding: '40px 20px',
@@ -1441,11 +1852,7 @@ const styles = {
     borderRadius: '8px',
     padding: '16px',
     marginBottom: '12px',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      borderColor: '#cbd5e0',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
-    }
+    transition: 'all 0.2s ease'
   },
   transactionHeader: {
     display: 'flex',
@@ -1518,10 +1925,7 @@ const styles = {
     borderRadius: '6px',
     fontSize: '12px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      background: '#e2e8f0'
-    }
+    transition: 'all 0.2s ease'
   },
   explorerButton: {
     background: '#667eea',
@@ -1531,11 +1935,10 @@ const styles = {
     borderRadius: '6px',
     fontSize: '12px',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      background: '#5a6fd8'
-    }
+    transition: 'all 0.2s ease'
   },
+
+  // Modal Styles
   modalOverlay: {
     position: 'fixed',
     top: 0,
@@ -1584,11 +1987,7 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: '50%',
-    transition: 'all 0.2s ease',
-    ':hover': {
-      background: '#f7fafc',
-      color: '#4a5568'
-    }
+    transition: 'all 0.2s ease'
   },
   modalContent: {
     padding: '20px'
@@ -1627,9 +2026,170 @@ const styles = {
     padding: '40px',
     textAlign: 'center',
     color: '#718096'
+  },
+
+  // Page Styles
+  pageContainer: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: '40px 20px'
+  },
+  pageHeader: {
+    textAlign: 'center',
+    marginBottom: '60px'
+  },
+  pageTitle: {
+    fontSize: '48px',
+    fontWeight: '700',
+    color: '#2d3748',
+    margin: '0 0 16px 0'
+  },
+  pageSubtitle: {
+    fontSize: '20px',
+    color: '#718096',
+    lineHeight: '1.6',
+    margin: '0'
+  },
+
+  // Features Page
+  featuresGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+    gap: '30px',
+    marginTop: '40px'
+  },
+  featureCard: {
+    background: 'white',
+    padding: '40px 30px',
+    borderRadius: '12px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+    textAlign: 'center',
+    transition: 'transform 0.2s ease'
+  },
+  featureIcon: {
+    color: '#667eea',
+    marginBottom: '20px'
+  },
+
+  // About Page
+  aboutContent: {
+    maxWidth: '800px',
+    margin: '0 auto'
+  },
+  aboutSection: {
+    marginBottom: '50px'
+  },
+  sectionTitle: {
+    fontSize: '28px',
+    fontWeight: '600',
+    color: '#2d3748',
+    margin: '0 0 20px 0'
+  },
+  sectionText: {
+    fontSize: '16px',
+    color: '#718096',
+    lineHeight: '1.7',
+    margin: '0'
+  },
+  techGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+    gap: '20px',
+    marginTop: '30px'
+  },
+  techItem: {
+    background: '#f7fafc',
+    padding: '20px',
+    borderRadius: '8px',
+    border: '1px solid #e2e8f0'
+  },
+  statsSection: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '30px',
+    marginTop: '50px'
+  },
+  statBox: {
+    textAlign: 'center',
+    padding: '30px 20px',
+    background: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+  },
+  statNumber: {
+    fontSize: '36px',
+    fontWeight: '700',
+    color: '#667eea',
+    marginBottom: '8px'
+  },
+  statLabel: {
+    fontSize: '14px',
+    color: '#718096'
+  },
+
+  // Contact Page
+  contactContent: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '60px',
+    maxWidth: '1000px',
+    margin: '0 auto'
+  },
+  contactForm: {
+    background: 'white',
+    padding: '40px',
+    borderRadius: '12px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)'
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px'
+  },
+  contactInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '30px'
+  },
+  infoTitle: {
+    fontSize: '24px',
+    fontWeight: '600',
+    color: '#2d3748',
+    margin: '0 0 20px 0'
+  },
+  contactItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '16px',
+    padding: '20px',
+    background: 'white',
+    borderRadius: '8px',
+    boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)'
+  },
+  contactIcon: {
+    color: '#667eea',
+    marginTop: '4px'
+  },
+  textarea: {
+    resize: 'vertical',
+    minHeight: '120px'
+  },
+  submitButton: {
+    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    color: 'white',
+    border: 'none',
+    padding: '14px 28px',
+    borderRadius: '8px',
+    fontSize: '16px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    width: '100%',
+    boxShadow: '0 4px 12px rgba(102, 126, 234, 0.3)'
   }
 }
 
+// Global styles
 const globalStyles = `
 @keyframes spin {
   0% { transform: rotate(0deg); }
@@ -1649,6 +2209,88 @@ const globalStyles = `
 body {
   margin: 0;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Hover effects */
+button:hover {
+  transform: translateY(-1px);
+}
+
+.connect-button:hover {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.hero-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.secondary-hero-button:hover {
+  background: #667eea;
+  color: white;
+}
+
+.primary-button:hover {
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.secondary-button:hover {
+  background: #e2e8f0;
+}
+
+.file-upload-label:hover {
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.nav-link:hover {
+  color: #667eea;
+}
+
+.footer-link:hover {
+  color: white;
+}
+
+.detail-button:hover {
+  background: #e2e8f0;
+}
+
+.explorer-button:hover {
+  background: #5a6fd8;
+}
+
+.faucet-button:hover {
+  background: #5a6fd8;
+}
+
+.close-button:hover {
+  background: #f7fafc;
+  color: #4a5568;
+}
+
+.submit-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.visual-card:hover {
+  transform: translateY(-5px);
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+}
+
+.transaction-item:hover {
+  border-color: #cbd5e0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Focus states */
+.select:focus, .input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 /* Scrollbar styling */
@@ -1671,6 +2313,7 @@ body {
 }
 `
 
+// Add global styles to document
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style')
   styleSheet.textContent = globalStyles
